@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchRecommendations, fetchQuickStats } from "./actions";
+import { generateRecommendationPlanAction } from "./actions";
+import { planToPdfBytes } from "@/lib/plan-pdf";
 
 type RecType = 'strategic' | 'media' | 'social'
 type Timeframe = 'day' | 'week' | 'month' | 'quarter'
@@ -33,6 +35,7 @@ export default function RecommendationsPage() {
   const [items, setItems] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(false)
   const [stats, setStats] = React.useState<{active:number;implemented:number;pending:number;successRate:number}>({active:0,implemented:0,pending:0,successRate:0})
+  const [generating, setGenerating] = React.useState(false)
 
   const load = React.useCallback(async ()=>{
     setLoading(true)
@@ -49,6 +52,34 @@ export default function RecommendationsPage() {
   }, [politician, timeframe, activeTab])
 
   React.useEffect(()=>{ load() }, [load])
+
+  const handleGeneratePdf = React.useCallback(async () => {
+    try {
+      setGenerating(true)
+      const plan = await generateRecommendationPlanAction({
+        politician,
+        type: activeTab,
+        timeframe,
+        items,
+      })
+      const pdfBytes = await planToPdfBytes(plan, { politician, type: activeTab, timeframe })
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const stamp = new Date().toISOString().slice(0,10)
+      a.href = url
+      a.download = `Plano_${politician}_${activeTab}_${stamp}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Falha ao gerar PDF', e)
+      alert('Não foi possível gerar o PDF do plano agora.')
+    } finally {
+      setGenerating(false)
+    }
+  }, [politician, activeTab, timeframe, items])
 
   return (
     <div className="space-y-6">
@@ -97,6 +128,11 @@ export default function RecommendationsPage() {
               <TabsTrigger value="social">📱 Social</TabsTrigger>
             </TabsList>
           </Tabs>
+          <div className="mt-3 flex items-center justify-end">
+            <Button size="sm" onClick={handleGeneratePdf} disabled={generating || loading}>
+              {generating ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Gerando PDF…</>) : 'Gerar Plano (PDF)'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -163,4 +199,3 @@ export default function RecommendationsPage() {
     </div>
   )
 }
-
