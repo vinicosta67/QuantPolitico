@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Search, RefreshCw } from "lucide-react";
+import { Loader2, Search, RefreshCw, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { searchNews } from "./actions";
+import { sendLatestNewsToWhatsApp } from "./whatsapp";
 import type { NewsArticle } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -155,6 +156,62 @@ export default function NoticiasPage() {
   // Helper derived values for trends (safe during initial render)
   const lastTrend = trends.length ? trends[trends.length - 1] : null;
 
+  // WhatsApp (server-side send via API)
+  const [sending, setSending] = React.useState(false);
+  const handleSendWhatsAppAPI = async () => {
+    try {
+      setSending(true);
+      await sendLatestNewsToWhatsApp({
+        query: filters.query || undefined,
+        category: filters.category as any,
+        sentiment: filters.sentiment as any,
+        politician: filters.politician as any,
+        hours: filters.hours,
+        limit: 5,
+      });
+      toast({ title: "Enviado", description: "As 5 últimas notícias foram enviadas para o WhatsApp." });
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "Falha no envio", description: e?.message || "Verifique as credenciais do provedor.", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // WhatsApp integration
+  const WHATSAPP_NUMBER = "5599999999999"; // número fictício (use DDI+DDD+número)
+  const formatSentimentLabel = (v: number) => (v > 0.2 ? "Positivo" : v < -0.2 ? "Negativo" : "Neutro");
+  function buildWhatsAppMessage(items: ExtendedNews[]) {
+    const header = `Últimas notícias (${new Date().toLocaleString('pt-BR')}):`;
+    const lines = items.map((n, i) => {
+      const tags = [n.category, ...(n.politicians_mentioned || [])]
+        .filter(Boolean)
+        .map(t => `#${t}`)
+        .join(" ");
+      const subtitle = n.content || n.summary || "";
+      const sLabel = formatSentimentLabel(n.sentiment_score);
+      return [
+        `${i + 1}) ${n.title}`,
+        subtitle ? `Subtítulo: ${subtitle}` : undefined,
+        `Sentimento: ${sLabel} (${n.sentiment_score.toFixed(2)})`,
+        `Tags: ${tags || '-'}`,
+        `Confiança: ${n.confidence_score.toFixed(2)}`,
+        n.url ? `Link: ${n.url}` : undefined,
+      ].filter(Boolean).join("\n");
+    });
+    return [header, "", ...lines].join("\n");
+  }
+  const handleSendWhatsApp = () => {
+    if (!filteredNews.length) {
+      toast({ title: "Sem notícias", description: "Nenhuma notícia disponível para enviar." });
+      return;
+    }
+    const items = filteredNews.slice(0, 5);
+    const message = buildWhatsAppMessage(items);
+    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
@@ -170,6 +227,9 @@ export default function NoticiasPage() {
           <Button variant="outline" size="sm" onClick={loadNews} disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
             Atualizar
+          </Button>
+          <Button size="sm" onClick={handleSendWhatsAppAPI} disabled={sending}>
+            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar 5 via WhatsApp
           </Button>
         </div>
       </div>
@@ -332,9 +392,9 @@ export default function NoticiasPage() {
             </TabsList>
 
             <TabsContent value="analysis" className="mt-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total de Notícias</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{systemMetrics.total_news}</CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Categorias</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{systemMetrics.categories}</CardContent></Card>
+                
                 <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Sentimento Médio</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${sentimentColor(systemMetrics.avg_sentiment)}`}>{systemMetrics.avg_sentiment.toFixed(2)}</CardContent></Card>
                 <Card><CardHeader className="pb-2"><CardTitle className="text-sm">% Positivas</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{systemMetrics.positive_percentage.toFixed(1)}%</CardContent></Card>
               </div>

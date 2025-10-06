@@ -7,7 +7,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Search } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis, Legend, ScatterChart, Scatter, ZAxis, Tooltip } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis, Legend, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
 // Importando os dados do seu arquivo data.ts
@@ -17,7 +17,6 @@ import {
     sentimentPolarityData,
     relevantTopics1,
     relevantTopics2,
-    socialMediaData,
     competitionData
 } from "@/lib/data";
 
@@ -86,11 +85,21 @@ export default function GovernoPage() {
                 <CardTitle>Índice Ministerial</CardTitle>
             </CardHeader>
             <CardContent>
-                <ChartContainer config={{}} className="h-[200px] w-full">
-                    <BarChart layout="vertical" data={ministerialIndexData} stackOffset="expand">
+                <ChartContainer
+                    config={{
+                        positive: { label: "Positivo", color: "hsl(var(--chart-2))" },
+                        neutral: { label: "Neutro", color: "hsl(var(--muted))" },
+                        negative: { label: "Negativo", color: "hsl(var(--destructive))" },
+                    }}
+                    className="h-[220px] w-full"
+                >
+                    <BarChart layout="vertical" data={ministerialIndexData} barCategoryGap={12}>
                         <XAxis type="number" hide domain={[0, 100]} />
-                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={4} width={70}/>
-                        <Tooltip content={<ChartTooltipContent hideLabel />} />
+                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={90}/>
+                        <Tooltip content={<ChartTooltipContent hideLabel formatter={(value: any, name?: any) => (
+                          <div className="flex w-full justify-between"><span className="text-muted-foreground">{name}</span><span className="font-mono">{Number(value).toFixed(0)}%</span></div>
+                        )} />} />
+                        <Legend />
                         <Bar dataKey="positive" fill="hsl(var(--chart-2))" stackId="a" radius={[4, 0, 0, 4]} />
                         <Bar dataKey="neutral" fill="hsl(var(--muted))" stackId="a" />
                         <Bar dataKey="negative" fill="hsl(var(--destructive))" stackId="a" radius={[0, 4, 4, 0]} />
@@ -152,26 +161,7 @@ export default function GovernoPage() {
             </CardContent>
         </Card>
 
-        <Card>
-            <CardHeader>
-                <CardTitle>Redes Sociais</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <ChartContainer config={{}} className="h-[200px] w-full">
-                    <ResponsiveContainer>
-                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                            <XAxis type="number" dataKey="impact" name="Impacto" hide/>
-                            <YAxis type="number" dataKey="reach" name="Alcance" hide/>
-                            <ZAxis type="category" dataKey="name" />
-                            <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTooltipContent hideLabel />} />
-                            {socialMediaData.map((point, index) => (
-                                <Scatter key={index} name={point.name} data={[point]} fill={point.color} />
-                            ))}
-                        </ScatterChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
-            </CardContent>
-        </Card>
+        {/* Redes Sociais removido: depende de integração externa de menções (ex.: Twitter API) */}
 
       </div>
 

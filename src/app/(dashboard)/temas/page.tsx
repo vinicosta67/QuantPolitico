@@ -9,12 +9,8 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RTooltip, Line, 
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { themesRadarData, sentimentProjectionData, narrativeClusterData, trendDetectionData, stakeholderMappingData } from "@/lib/data";
+import { sentimentProjectionData, narrativeClusterData, trendDetectionData, stakeholderMappingData } from "@/lib/data";
 import { themesOverview, themesDistribution, themeNews } from "@/lib/themes-mock";
-
-const WavyLine = ({ color = 'hsl(var(--primary))' }) => (
-  <svg width="40" height="10" viewBox="0 0 40 10" className="opacity-70"><path d="M0 5 Q 5 0, 10 5 T 20 5 T 30 5 T 40 5" stroke={color} fill="none" strokeWidth="2"/></svg>
-);
 
 export default function TemasPage() {
   const [days] = React.useState(7);
@@ -26,7 +22,7 @@ export default function TemasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">📡 Radar de Temas</h2>
+        <h2 className="text-2xl font-semibold">Radar de Temas</h2>
         <p className="text-muted-foreground">Análise temática e tendências dos últimos {days} dias</p>
       </div>
 
@@ -55,9 +51,9 @@ export default function TemasPage() {
           </CardContent>
         </Card>
 
-        {/* Sentimento e projeção */}
+        {/* Análise de sentimento (sem projeção) */}
         <Card>
-          <CardHeader><CardTitle>Análise de Sentimento e Projeção</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Análise de Sentimento</CardTitle></CardHeader>
           <CardContent>
             <ChartContainer config={{ positive:{label:'Positivo',color:'hsl(var(--chart-2))'}, negative:{label:'Negativo', color:'hsl(var(--destructive))'} }} className="h-[250px] w-full">
               <LineChart data={sentimentProjectionData} margin={{ left: -20, right: 20, top: 10, bottom: 0 }}>
@@ -84,9 +80,9 @@ export default function TemasPage() {
           </CardContent>
         </Card>
 
-        {/* Detecção de tendência (fix: cores corretas) */}
+        {/* Menções por tema (substitui "detecção de tendência") */}
         <Card>
-          <CardHeader><CardTitle>Detecção de Tendência</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Menções de Temas</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {trendDetectionData.map((item)=> (
               <div key={item.name} className="flex items-center gap-4">
@@ -97,7 +93,7 @@ export default function TemasPage() {
           </CardContent>
         </Card>
 
-        {/* Feeder de notícias por tema */}
+        {/* Feed de notícias por tema */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Artigos sobre: {selectedTheme}</CardTitle>

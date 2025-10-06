@@ -7,7 +7,7 @@ import { BarChart2, Bot, Newspaper, Tags, Users, Vote, Landmark, Menu } from "lu
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart2 },
@@ -76,6 +76,10 @@ export function Header() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="pr-0">
+            {/* A11y: DialogContent requer um Título para leitores de tela */}
+            <SheetHeader className="sr-only">
+              <SheetTitle>Menu de navegação</SheetTitle>
+            </SheetHeader>
             <Link href="/" className="mr-6 flex items-center space-x-2">
               <BarChart2 className="h-6 w-6 text-primary" />
               <span className="font-bold sm:inline-block">Quant Politico</span>
