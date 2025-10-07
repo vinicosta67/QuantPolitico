@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchRecommendations, fetchQuickStats } from "./actions";
-import { generateRecommendationPlanAction } from "./actions";
+import { generateRecommendationPlanAction, fetchPlanNewsAction, type NewsGroup } from "./actions";
 import { planToPdfBytes } from "@/lib/plan-pdf";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type RecType = 'strategic' | 'media' | 'social'
 type Timeframe = 'day' | 'week' | 'month' | 'quarter'
@@ -36,6 +37,10 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = React.useState(false)
   const [stats, setStats] = React.useState<{active:number;implemented:number;pending:number;successRate:number}>({active:0,implemented:0,pending:0,successRate:0})
   const [generating, setGenerating] = React.useState(false)
+  const [lastPlan, setLastPlan] = React.useState<any|null>(null)
+  const [newsOpen, setNewsOpen] = React.useState(false)
+  const [newsLoading, setNewsLoading] = React.useState(false)
+  const [newsGroups, setNewsGroups] = React.useState<NewsGroup[]|null>(null)
 
   const load = React.useCallback(async ()=>{
     setLoading(true)
@@ -62,6 +67,7 @@ export default function RecommendationsPage() {
         timeframe,
         items,
       })
+      setLastPlan(plan as any)
       const pdfBytes = await planToPdfBytes(plan, { politician, type: activeTab, timeframe })
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
@@ -80,6 +86,23 @@ export default function RecommendationsPage() {
       setGenerating(false)
     }
   }, [politician, activeTab, timeframe, items])
+
+  const handleViewNews = React.useCallback(async () => {
+    try {
+      setNewsLoading(true)
+      const competitors = Array.isArray((lastPlan as any)?.competitiveStrategies)
+        ? (lastPlan as any).competitiveStrategies.map((c: any)=> c?.competitor).filter(Boolean)
+        : []
+      const groups = await fetchPlanNewsAction({ politician, timeframe, competitors })
+      setNewsGroups(groups)
+      setNewsOpen(true)
+    } catch (e) {
+      console.error('Falha ao buscar notícias', e)
+      alert('Não foi possível carregar as notícias agora.')
+    } finally {
+      setNewsLoading(false)
+    }
+  }, [politician, timeframe, lastPlan])
 
   return (
     <div className="space-y-6">
@@ -128,9 +151,12 @@ export default function RecommendationsPage() {
               <TabsTrigger value="social">📱 Social</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="mt-3 flex items-center justify-end">
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
             <Button size="sm" onClick={handleGeneratePdf} disabled={generating || loading}>
               {generating ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Gerando PDF…</>) : 'Gerar Plano (PDF)'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleViewNews} disabled={newsLoading}>
+              {newsLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Carregando…</>) : 'Ver notícias usadas'}
             </Button>
           </div>
         </CardHeader>
@@ -196,6 +222,36 @@ export default function RecommendationsPage() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Pendentes</CardTitle></CardHeader><CardContent className="text-center text-2xl font-bold text-yellow-600">{stats.pending}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Taxa de Sucesso</CardTitle></CardHeader><CardContent className="text-center text-2xl font-bold text-primary">{stats.successRate}%</CardContent></Card>
       </div>
+
+      {/* News dialog */}
+      <Dialog open={newsOpen} onOpenChange={setNewsOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Notícias usadas (últimos {timeframe === 'day' ? '1' : timeframe === 'week' ? '7' : '14'} dias)</DialogTitle>
+          </DialogHeader>
+          {!newsGroups || newsGroups.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Nenhuma notícia encontrada para as consultas.</div>
+          ) : (
+            <div className="space-y-4">
+              {newsGroups.map((g, gi)=> (
+                <div key={gi} className="space-y-2">
+                  <div className="text-sm font-semibold">Consulta: {g.query} {g.ok ? '' : '(falha)'}</div>
+                  <ul className="space-y-1">
+                    {g.items.map((a, ai)=> (
+                      <li key={ai} className="text-sm">
+                        <a href={a.url} target="_blank" rel="noreferrer" className="underline">
+                          {a.title}
+                        </a>
+                        <span className="text-muted-foreground"> — {a.source} — {new Date(a.publishedAt).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

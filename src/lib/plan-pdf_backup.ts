@@ -78,9 +78,9 @@ function addHeader(page: any, title: string, meta: PlanPdfMeta, fontRegular: any
 
   // Chips row (meta)
   const chips = [
-    { label: `Político: ${meta.politician}` },
+    { label: `PolÃ­tico: ${meta.politician}` },
     { label: `Aba: ${meta.type}` },
-    { label: `Período: ${meta.timeframe}` },
+    { label: `PerÃ­odo: ${meta.timeframe}` },
   ];
   let cx = margin; const cy = ty - 10;
   for (const c of chips) {
@@ -168,7 +168,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   y = drawSectionTitle(page, y, 'Objetivos (KPIs)', fontBold);
   for (const obj of plan.objectives) {
     { const r = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
-    const lines = wrapText(`• ${obj}`, 100);
+    const lines = wrapText(`â€¢ ${obj}`, 100);
     for (const l of lines) {
       drawTextMixed(page, PAGE.margin, y, l, 10, THEME.text);
       y -= GAP.line;
@@ -179,10 +179,10 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   // Competitive strategies (optional)
   const comp: any[] | undefined = (plan as any).competitiveStrategies;
   if (Array.isArray(comp) && comp.length > 0) {
-    y = drawSectionTitle(page, y, 'Estratégia Competitiva (com base nas notícias)', fontBold);
+    y = drawSectionTitle(page, y, 'EstratÃ©gia Competitiva (com base nas notÃ­cias)', fontBold);
     for (const c of comp) {
       { const r = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
-      page.drawText(`• ${c.competitor || 'Concorrente'}`, { x: PAGE.margin, y, size: 11, font: fontBold, color: THEME.text });
+      page.drawText(`â€¢ ${c.competitor || 'Concorrente'}`, { x: PAGE.margin, y, size: 11, font: fontBold, color: THEME.text });
       y -= GAP.line;
       if (Array.isArray(c.insights) && c.insights.length) {
         const lns = c.insights.flatMap((s: string) => wrapText(`- ${s}`, 95));
@@ -197,11 +197,11 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   }
 
   // Actions
-  y = drawSectionTitle(page, y, 'Ações Recomendadas', fontBold);
+  y = drawSectionTitle(page, y, 'AÃ§Ãµes Recomendadas', fontBold);
   for (const a of plan.actions) {
     { const r = ensureSpace(doc, page, y, 36, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
     // Title line with accent underline
-    page.drawText(`• ${a.title}`, { x: PAGE.margin, y, size: 11, font: fontBold, color: THEME.text });
+    page.drawText(`â€¢ ${a.title}`, { x: PAGE.margin, y, size: 11, font: fontBold, color: THEME.text });
     page.drawLine({ start: { x: PAGE.margin, y: y - 3 }, end: { x: PAGE.width - PAGE.margin, y: y - 3 }, thickness: 0.5, color: THEME.border });
     y -= GAP.line;
     const stepLines = a.steps.flatMap(s => wrapText(`- ${s}`, 95));
@@ -211,7 +211,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
       y -= GAP.line;
     }
     if (a.owners?.length) {
-      const ownersLine = wrapText(`Responsáveis: ${a.owners.join(', ')}`, 100);
+      const ownersLine = wrapText(`ResponsÃ¡veis: ${a.owners.join(', ')}`, 100);
       for (const l of ownersLine) { drawTextMixed(page, PAGE.margin + 12, y, l, 9, THEME.accent); y -= GAP.line; }
     }
     if (a.kpis?.length) {
@@ -238,18 +238,18 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   y -= GAP.section;
 
   // Risks
-  y = drawSectionTitle(page, y, 'Riscos & Mitigações', fontBold);
+  y = drawSectionTitle(page, y, 'Riscos & MitigaÃ§Ãµes', fontBold);
   for (const r of plan.risks) {
     { const rr = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = rr.page; y = rr.y; }
-    const lns = wrapText(`• ${r}`, 100);
+    const lns = wrapText(`â€¢ ${r}`, 100);
     for (const l of lns) { drawTextMixed(page, PAGE.margin, y, l, 10, THEME.text); y -= GAP.line; }
   }
   y -= GAP.section;
   // Monitoring
-  y = drawSectionTitle(page, y, 'Monitoramento & Próximos Passos', fontBold);
+  y = drawSectionTitle(page, y, 'Monitoramento & PrÃ³ximos Passos', fontBold);
   for (const m of plan.monitoring) {
     { const rr = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = rr.page; y = rr.y; }
-    const lns = wrapText(`• ${m}`, 100);
+    const lns = wrapText(`â€¢ ${m}`, 100);
     for (const l of lns) { drawTextMixed(page, PAGE.margin, y, l, 10, THEME.text); y -= GAP.line; }
   }
 
@@ -258,8 +258,8 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   pages.forEach((p, idx) => {
     const yb = 28;
     p.drawLine({ start: { x: PAGE.margin, y: yb + 8 }, end: { x: PAGE.width - PAGE.margin, y: yb + 8 }, thickness: 0.5, color: THEME.border });
-    p.drawText(`Quant Politico — Inteligência Eleitoral`, { x: PAGE.margin, y: yb, size: 9, font, color: THEME.muted });
-    const label = `Página ${idx + 1} de ${pages.length}`;
+    p.drawText(`Quant Politico â€” InteligÃªncia Eleitoral`, { x: PAGE.margin, y: yb, size: 9, font, color: THEME.muted });
+    const label = `PÃ¡gina ${idx + 1} de ${pages.length}`;
     const approx = label.length * 5;
     p.drawText(label, { x: PAGE.width - PAGE.margin - approx, y: yb, size: 9, font, color: THEME.muted });
   });
@@ -267,5 +267,4 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   const pdfBytes = await doc.save();
   return pdfBytes;
 }
-
 
