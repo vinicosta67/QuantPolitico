@@ -43,10 +43,23 @@ export async function fetchPlanNewsAction(params: {
   competitors?: string[];
 }): Promise<NewsGroup[]> {
   const days = timeframeToDays(params.timeframe);
+  // Base list of candidates visible/used in the Recommendations tab UI
+  const DEFAULT_CANDIDATES = [
+    'Lula',
+    'Bolsonaro',
+    'Tarcísio',
+    'Boulos',
+  ];
+
+  // Merge: selected politician + competitors from the generated plan + other candidates from the tab
   const queries = Array.from(
     new Set(
-      [params.politician, ...(params.competitors ?? [])]
-        .map((s) => (s || "").trim())
+      [
+        params.politician,
+        ...(params.competitors ?? []),
+        ...DEFAULT_CANDIDATES.filter((c) => c !== params.politician),
+      ]
+        .map((s) => (s || '').trim())
         .filter(Boolean)
     )
   );

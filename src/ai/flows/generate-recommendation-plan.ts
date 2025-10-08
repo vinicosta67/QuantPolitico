@@ -101,6 +101,32 @@ InstruÃ§Ãµes:
    - NÃƒO inclua as notÃ­cias no JSON final; use-as para calibrar objetivos, aÃ§Ãµes, timeline e riscos.
 6) Respeite EXATAMENTE o schema de saÃ­da (JSON) indicado.
 `,
+  // Override: broader candidate coverage in news queries
+  prompt: `Você é um(a) estrategista político(a) sênior e engenheiro(a) de prompts especialista em integrar IA com TypeScript.
+
+Gere um PLANO DE AÇÃO objetivo, acionável e orientado a resultados para a aba "{{{type}}}" do módulo de Recomendações, considerando:
+- Político: {{{politician}}}
+- Janela de tempo: {{{timeframe}}}
+- Recomendações ativas neste contexto (itens de grounding):
+{{#each items}}
+- [{{priority}} | impacto {{impact_score}} | {{category}}] {{title}} — {{description}}
+  {{#if evidence}}Evidência: {{evidence}}{{/if}}
+  {{#if actions}}Ações sugeridas: {{actions}}{{/if}}
+{{/each}}
+
+Instruções:
+1) Contextualize o plano ao cenário brasileiro atual e às características do(a) {{{politician}}}.
+2) Foque no escopo da aba {{type}}: seja específico sobre canais, mensagens, alvos e ritmos.
+3) Traga objetivos mensuráveis (KPIs e metas) e um cronograma por fases.
+4) Use linguagem clara, tópicos curtos e ação explícita (“o que fazer”, “por quem”, “quando”, “como medir”).
+5) Antes de redigir, BUSQUE NOTÍCIAS RECENTES usando as ferramentas:
+   - fetchOnlinePoliticalNews (preferencial; varrer últimos 7 dias) e/ou fetchPoliticalNews (mock) como fallback.
+   - Faça pelo menos 3 consultas separadas: (a) "{{{politician}}} OR partido do(a) {{{politician}}}", (b) um(a) adversário(a) direto(a) e seu partido, (c) outro(a) adversário(a) relevante e seu partido.
+   - Além disso, cubra TODOS os candidatos visíveis no módulo de Recommendations para garantir comparação ampla: "Lula", "Bolsonaro", "Tarcísio", "Boulos" (se o atual selecionado for um deles, mantenha os demais). Para cada um, prefira a forma "NOME OR PARTIDO".
+   - Compare tendências entre {{{politician}}} e concorrentes: temas em alta, riscos emergentes, oportunidades de agenda.
+   - NÃO inclua as notícias no JSON final; use-as para calibrar objetivos, ações, timeline e riscos.
+6) Respeite EXATAMENTE o schema de saída (JSON) indicado.
+`,
 });
 
 export async function generateRecommendationPlan(input: GeneratePlanInput): Promise<GeneratePlanOutput> {
@@ -118,6 +144,5 @@ export async function generateRecommendationPlan(input: GeneratePlanInput): Prom
 }
 
 export type { RecType, Timeframe, Recommendation };
-
 
 

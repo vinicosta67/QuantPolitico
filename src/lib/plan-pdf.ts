@@ -92,6 +92,41 @@ function addHeader(page: any, title: string, meta: PlanPdfMeta, fontRegular: any
   }
 }
 
+// New: dynamic header that returns the starting Y for body content
+function addHeaderDynamic(page: any, title: string, meta: PlanPdfMeta, fontRegular: any, fontBold: any): number {
+  const { width, height, margin } = PAGE;
+  // Top bar
+  page.drawRectangle({ x: 0, y: height - 36, width, height: 36, color: THEME.primary });
+  page.drawRectangle({ x: 0, y: height - 38, width, height: 2, color: THEME.accent });
+  // Brand
+  page.drawText('Quant Politico', { x: margin, y: height - 26, size: 11, font: fontBold, color: rgb(1, 1, 1) });
+
+  // Title
+  const maxW = width - margin * 2;
+  const titleLines = wrapByWidth(fontBold, title, 20, maxW);
+  let ty = height - margin - 10 - 12;
+  for (const tl of titleLines) {
+    page.drawText(tl, { x: margin, y: ty, size: 20, font: fontBold, color: THEME.text });
+    ty -= 22;
+  }
+
+  // Chips row (meta)
+  const chips = [
+    { label: `Político: ${meta.politician}` },
+    { label: `Aba: ${meta.type}` },
+    { label: `Período: ${meta.timeframe}` },
+  ];
+  let cx = margin; const cy = ty - 10;
+  for (const c of chips) {
+    const padX = 6; const padY = 3;
+    const w = (fontRegular.widthOfTextAtSize ? fontRegular.widthOfTextAtSize(c.label, 9) : (c.label.length * 5.2)) + padX * 2;
+    page.drawRectangle({ x: cx, y: cy, width: w, height: 16, color: THEME.soft, borderWidth: 1, borderColor: THEME.border });
+    page.drawText(c.label, { x: cx + padX, y: cy + padY, size: 9, font: fontRegular, color: THEME.muted });
+    cx += w + 8;
+  }
+  return cy - 18;
+}
+
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(/\s+/);
   const lines: string[] = [];
@@ -118,8 +153,8 @@ function drawSectionTitle(page: any, y: number, text: string, font: any) {
 function ensureSpace(doc: PDFDocument, page: any, y: number, needed: number, fontRegular: any, fontBold: any, title: string, meta: PlanPdfMeta) {
   if (y - needed < PAGE.margin) {
     const p = doc.addPage([PAGE.width, PAGE.height]);
-    addHeader(p, title, meta, fontRegular, fontBold);
-    return { page: p, y: PAGE.height - PAGE.margin - 72 };
+    const yStart = addHeaderDynamic(p, title, meta, fontRegular, fontBold);
+    return { page: p, y: yStart };
   }
   return { page, y };
 }
@@ -130,9 +165,9 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const fontItalic = await doc.embedFont(StandardFonts.HelveticaOblique);
-  addHeader(firstPage, plan.title, meta, font, fontBold);
+  const yStart = addHeaderDynamic(firstPage, plan.title, meta, font, fontBold);
   let page = firstPage; // current drawing page
-  let y = PAGE.height - PAGE.margin - 78; // extra space for chips
+  let y = yStart; // start below header (dynamic)
 
   const italicWords = [
     'workshop', 'podcast', 'briefing', 'benchmark', 'benchmarking', 'stakeholder', 'stakeholders',
@@ -156,7 +191,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   // Summary
   { const r = ensureSpace(doc, page, y, 70, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
   y = drawSectionTitle(page, y, 'Resumo Executivo', fontBold);
-  const summaryLines = wrapText(plan.summary, 100);
+  const summaryLines = wrapByWidth(font, plan.summary, 10, PAGE.width - PAGE.margin * 2);
   for (const line of summaryLines) {
     { const r = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
     drawTextMixed(page, PAGE.margin, y, line, 10, THEME.text);
@@ -168,7 +203,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   y = drawSectionTitle(page, y, 'Objetivos (KPIs)', fontBold);
   for (const obj of plan.objectives) {
     { const r = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
-    const lines = wrapText(`• ${obj}`, 100);
+    const lines = wrapByWidth(font, `• ${obj}`, 10, PAGE.width - PAGE.margin * 2);
     for (const l of lines) {
       drawTextMixed(page, PAGE.margin, y, l, 10, THEME.text);
       y -= GAP.line;
@@ -185,11 +220,11 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
       page.drawText(`• ${c.competitor || 'Concorrente'}`, { x: PAGE.margin, y, size: 11, font: fontBold, color: THEME.text });
       y -= GAP.line;
       if (Array.isArray(c.insights) && c.insights.length) {
-        const lns = c.insights.flatMap((s: string) => wrapText(`- ${s}`, 95));
+        const lns = c.insights.flatMap((s: string) => wrapByWidth(font, `- ${s}`, 10, PAGE.width - PAGE.margin * 2 - 12));
         for (const l of lns) { drawTextMixed(page, PAGE.margin + 12, y, l, 10, THEME.muted); y -= GAP.line; }
       }
       if (Array.isArray(c.recommended) && c.recommended.length) {
-        const lns = c.recommended.flatMap((s: string) => wrapText(`- ${s}`, 95));
+        const lns = c.recommended.flatMap((s: string) => wrapByWidth(font, `- ${s}`, 10, PAGE.width - PAGE.margin * 2 - 12));
         for (const l of lns) { drawTextMixed(page, PAGE.margin + 12, y, l, 10, THEME.text); y -= GAP.line; }
       }
       y -= GAP.block;
@@ -204,18 +239,18 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
     page.drawText(`• ${a.title}`, { x: PAGE.margin, y, size: 11, font: fontBold, color: THEME.text });
     page.drawLine({ start: { x: PAGE.margin, y: y - 3 }, end: { x: PAGE.width - PAGE.margin, y: y - 3 }, thickness: 0.5, color: THEME.border });
     y -= GAP.line;
-    const stepLines = a.steps.flatMap(s => wrapText(`- ${s}`, 95));
+    const stepLines = a.steps.flatMap(s => wrapByWidth(font, `- ${s}`, 10, PAGE.width - PAGE.margin * 2 - 12));
     for (const l of stepLines) {
       { const r = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
       drawTextMixed(page, PAGE.margin + 12, y, l, 10, THEME.muted);
       y -= GAP.line;
     }
     if (a.owners?.length) {
-      const ownersLine = wrapText(`Responsáveis: ${a.owners.join(', ')}`, 100);
+      const ownersLine = wrapByWidth(font, `Responsáveis: ${a.owners.join(', ')}`, 9, PAGE.width - PAGE.margin * 2 - 12);
       for (const l of ownersLine) { drawTextMixed(page, PAGE.margin + 12, y, l, 9, THEME.accent); y -= GAP.line; }
     }
     if (a.kpis?.length) {
-      const kLine = wrapText(`KPIs: ${a.kpis.join(', ')}`, 100);
+      const kLine = wrapByWidth(font, `KPIs: ${a.kpis.join(', ')}`, 9, PAGE.width - PAGE.margin * 2 - 12);
       for (const l of kLine) { drawTextMixed(page, PAGE.margin + 12, y, l, 9, THEME.accent); y -= GAP.line; }
     }
     y -= GAP.block;
@@ -231,7 +266,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
     y -= GAP.line;
     for (const d of t.deliverables) {
       { const r = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = r.page; y = r.y; }
-      const lns = wrapText(`- ${d}`, 95);
+      const lns = wrapByWidth(font, `- ${d}`, 10, PAGE.width - PAGE.margin * 2 - 12);
       for (const l of lns) { drawTextMixed(page, PAGE.margin + 12, y, l, 10, THEME.muted); y -= GAP.line; }
     }
   }
@@ -241,7 +276,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   y = drawSectionTitle(page, y, 'Riscos & Mitigações', fontBold);
   for (const r of plan.risks) {
     { const rr = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = rr.page; y = rr.y; }
-    const lns = wrapText(`• ${r}`, 100);
+    const lns = wrapByWidth(font, `• ${r}`, 10, PAGE.width - PAGE.margin * 2);
     for (const l of lns) { drawTextMixed(page, PAGE.margin, y, l, 10, THEME.text); y -= GAP.line; }
   }
   y -= GAP.section;
@@ -249,7 +284,7 @@ export async function planToPdfBytes(plan: GeneratePlanOutput, meta: PlanPdfMeta
   y = drawSectionTitle(page, y, 'Monitoramento & Próximos Passos', fontBold);
   for (const m of plan.monitoring) {
     { const rr = ensureSpace(doc, page, y, GAP.line + 2, font, fontBold, plan.title, meta); page = rr.page; y = rr.y; }
-    const lns = wrapText(`• ${m}`, 100);
+    const lns = wrapByWidth(font, `• ${m}`, 10, PAGE.width - PAGE.margin * 2);
     for (const l of lns) { drawTextMixed(page, PAGE.margin, y, l, 10, THEME.text); y -= GAP.line; }
   }
 
