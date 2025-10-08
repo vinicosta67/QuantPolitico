@@ -152,12 +152,12 @@ export default function RecommendationsPage() {
             </TabsList>
           </Tabs>
           <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-            <Button size="sm" onClick={handleGeneratePdf} disabled={generating || loading}>
+            {/* <Button size="sm" onClick={handleGeneratePdf} disabled={generating || loading}>
               {generating ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Gerando PDF…</>) : 'Gerar Plano (PDF)'}
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleViewNews} disabled={newsLoading}>
+            </Button> */}
+            {/* <Button size="sm" variant="outline" onClick={handleViewNews} disabled={newsLoading}>
               {newsLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Carregando…</>) : 'Ver notícias usadas'}
-            </Button>
+            </Button> */}
           </div>
         </CardHeader>
         <CardContent>
@@ -202,9 +202,9 @@ export default function RecommendationsPage() {
                     <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                       <span>📅 Criado: {rec.created_date.replace('T',' ').slice(0,16)}</span>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline">✓ Implementar</Button>
+                        <Button onClick={handleGeneratePdf} size="sm" variant="secondary" disabled={generating}> {generating ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Implementando…</>) :'✓ Implementar'}</Button>
                         <Button size="sm" variant="secondary">📊 Detalhes</Button>
-                        <Button size="sm" variant="outline">📝 Nota</Button>
+                        {/* <Button size="sm" variant="outline">📝 Nota</Button> */}
                       </div>
                     </div>
                   </CardContent>
