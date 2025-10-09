@@ -40,6 +40,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'www.camara.leg.br',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
   experimental: {
