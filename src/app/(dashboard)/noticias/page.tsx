@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Search, RefreshCw, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { searchNews, generateNewsReportAction } from "./actions";
-import { sendLatestNewsToWhatsApp } from "./whatsapp";
+import { sendLatestNewsToWhatsApp, sendDemoNewsToWhatsApp, getDemoNewsMessage, getDemoNewsMessages } from "./whatsapp";
 import type { NewsArticle } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -189,7 +189,44 @@ export default function NoticiasPage() {
       setSending(false);
     }
   };
+  // Envio detalhado: retorna SIDs/status e mostra em toast
+  const handleSendWhatsAppAPIDetailed = async () => {
+    try {
+      setSending(true);
+      const result = await sendLatestNewsToWhatsApp({
+        query: filters.query || undefined,
+        category: filters.category as any,
+        sentiment: filters.sentiment as any,
+        politician: filters.politician as any,
+        hours: filters.hours,
+        limit: 5,
+      });
+      const detail = result?.results?.map((r: any) => r?.sid ? `SID ${r.sid} (${r.status})` : null).filter(Boolean).join(', ');
+      // Mostra quantidade e alguns SIDs
+      // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+      alert(`Twilio: enviados ${result?.sent}/${result?.attempts}. ${detail || ''}`);
+    } catch (e: any) {
+      console.error(e);
+      alert(`Falha no envio: ${e?.message || e}`);
+    } finally {
+      setSending(false);
+    }
+  };
 
+  // Abre DEMO no WhatsApp Web (wa.me) para visualizar as mensagens
+  const handleOpenWhatsAppDemo = async () => {
+    try {
+      const msgs: string[] = await getDemoNewsMessages() as any;
+      if (!Array.isArray(msgs) || msgs.length === 0) {
+        alert('Sem mensagens para abrir.');
+        return;
+      }
+      msgs.forEach((m, i) => setTimeout(() => window.open(`https://wa.me/?text=${encodeURIComponent(m)}`, '_blank'), i * 200));
+    } catch (e: any) {
+      console.error(e);
+      alert(`Falha ao abrir demo: ${e?.message || e}`);
+    }
+  };
   // WhatsApp integration
   const WHATSAPP_NUMBER = "5599999999999"; // número fictício (use DDI+DDD+número)
   const formatSentimentLabel = (v: number) => (v > 0.2 ? "Positivo" : v < -0.2 ? "Negativo" : "Neutro");
@@ -264,6 +301,12 @@ export default function NoticiasPage() {
           <Button size="sm" onClick={handleSendWhatsAppAPI} disabled={sending}>
             {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar 5 via WhatsApp
           </Button>
+          {/* <Button size="sm" variant="secondary" onClick={handleSendWhatsAppAPIDetailed} disabled={sending}>
+            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar 5 (detalhado)
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleOpenWhatsAppDemo}>
+            Abrir demo no WhatsApp
+          </Button> */}
         </div>
       </div>
 
