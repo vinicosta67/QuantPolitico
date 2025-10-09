@@ -1,6 +1,7 @@
 'use server';
 
 import { fetchPoliticalNews } from '@/ai/tools/fetch-news';
+import { fetchOnlinePoliticalNews } from '@/ai/tools/fetch-online-news';
 import type { NewsArticle } from '@/lib/types';
 
 export type NewsFilters = {
@@ -78,7 +79,6 @@ function buildWhatsAppMessage(items: ExtendedNews[]) {
       subtitle ? `Subtitulo: ${subtitle}` : undefined,
       `Sentimento: ${sLabel} (${n.sentiment_score.toFixed(2)})`,
       `Tags: ${tags || '-'}`,
-      `Confianca: ${n.confidence_score.toFixed(2)}`,
       n.url ? `Link: ${n.url}` : undefined,
     ].filter(Boolean).join('\n');
   });
@@ -104,7 +104,7 @@ function buildWhatsAppSnippet(n: ExtendedNews) {
     `*📰 ${truncate(n.title, 120)}*`,
     `${n.source || ''} • ${dateLabel}`.trim(),
     summary ? `Resumo: ${truncate(summary, 240)}` : undefined,
-    `Sentimento: ${sLabel} (${n.sentiment_score.toFixed(2)}) • Confiança: ${n.confidence_score.toFixed(2)}`,
+    `Sentimento: ${sLabel} (${n.sentiment_score.toFixed(2)})`,
     tags ? `Tags: ${tags}` : undefined,
     n.url ? `🔗 ${n.url}` : undefined,
   ].filter(Boolean).join('\n');
@@ -321,12 +321,41 @@ export async function sendLatestNewsToWhatsApp(filters?: NewsFilters) {
     return { ok: true, sent, attempts: top.length, mode: 'demo' as const, results, errors };
   }
 
-  const newsItems = await fetchPoliticalNews({ query: filters?.query });
-  const sorted = [...newsItems].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-  const withIds = sorted.map((item, index) => ({ ...item, id: `${item.url}-${index}` }));
+  // Prefer real online news (GDELT) when available, fallback to mock
+  const defaultQuery = filters?.query && filters?.query.trim() ? filters?.query : 'Lula OR Bolsonaro OR Tarcisio OR Boulos OR Congresso OR Governo';
+  const days = Math.max(1, Math.min(14, Math.ceil((filters?.hours ?? 24) / 24)));
+  let newsItems: any[] = [];
+  try {
+    newsItems = await fetchOnlinePoliticalNews({ query: defaultQuery, days });
+  } catch (e) {
+    newsItems = [];
+  }
+  if (!newsItems || newsItems.length === 0) {
+    newsItems = await fetchPoliticalNews({ query: filters?.query });
+  }
+  // Normalize links: ensure every item has a real https link; if missing, build a Google News search link for the title/source
+  let normalized = (newsItems || []).map((it) => {
+    const hasHttp = typeof it?.url === 'string' && /^https?:\/\//i.test(it.url);
+    const url = hasHttp ? it.url : `https://www.google.com/search?hl=pt-BR&q=${encodeURIComponent(`${it.title} ${it.source || ''}`)}`;
+    return { ...it, url };
+  });
+  // If still too few items, broaden once
+  if (normalized.length < 2) {
+    try {
+      const alt = await fetchOnlinePoliticalNews({ query: 'Brazil politics OR Brasil OR Governo OR Congresso', days: Math.max(1, Math.min(14, days)) });
+      const altNorm = (alt || []).map((it: any) => {
+        const hasHttp = typeof it?.url === 'string' && /^https?:\/\//i.test(it.url);
+        const url = hasHttp ? it.url : `https://www.google.com/search?hl=pt-BR&q=${encodeURIComponent(`${it.title} ${it.source || ''}`)}`;
+        return { ...it, url };
+      });
+      normalized = [...normalized, ...altNorm];
+    } catch {}
+  }
+  const sorted = [...normalized].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  const withIds = sorted.map((item, index) => ({ ...item, id: `${item.url || 'no-url'}-${index}` }));
   const enriched = enrichNewsServer(withIds);
   const filtered = applyFilters(enriched, filters);
-  const limit = Math.max(1, Math.min(filters?.limit ?? 5, 10));
+  const limit = Math.max(1, Math.min(filters?.limit ?? 2, 10));
   const top = filtered.slice(0, limit);
   if (top.length === 0) throw new Error('Nenhuma noticia para enviar.');
   let sent = 0; const errors: string[] = []; const results: TwilioSendResult[] = [];

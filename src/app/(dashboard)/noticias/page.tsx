@@ -179,7 +179,7 @@ export default function NoticiasPage() {
         sentiment: filters.sentiment as any,
         politician: filters.politician as any,
         hours: filters.hours,
-        limit: 5,
+        limit: 2,
       });
       toast({ title: "Enviado", description: "As 5 últimas notícias foram enviadas para o WhatsApp." });
     } catch (e: any) {
@@ -199,7 +199,7 @@ export default function NoticiasPage() {
         sentiment: filters.sentiment as any,
         politician: filters.politician as any,
         hours: filters.hours,
-        limit: 5,
+        limit: 2,
       });
       const detail = result?.results?.map((r: any) => r?.sid ? `SID ${r.sid} (${r.status})` : null).filter(Boolean).join(', ');
       // Mostra quantidade e alguns SIDs
@@ -244,7 +244,7 @@ export default function NoticiasPage() {
         subtitle ? `Subtítulo: ${subtitle}` : undefined,
         `Sentimento: ${sLabel} (${n.sentiment_score.toFixed(2)})`,
         `Tags: ${tags || '-'}`,
-        `Confiança: ${n.confidence_score.toFixed(2)}`,
+
         n.url ? `Link: ${n.url}` : undefined,
       ].filter(Boolean).join("\n");
     });
@@ -299,7 +299,7 @@ export default function NoticiasPage() {
             Atualizar
           </Button>
           <Button size="sm" onClick={handleSendWhatsAppAPI} disabled={sending}>
-            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar 5 via WhatsApp
+            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar 2 via WhatsApp
           </Button>
           {/* <Button size="sm" variant="secondary" onClick={handleSendWhatsAppAPIDetailed} disabled={sending}>
             {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar 5 (detalhado)
@@ -324,10 +324,7 @@ export default function NoticiasPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">Notícias Positivas</CardTitle></CardHeader>
           <CardContent className={`text-2xl font-bold ${positivePctColor(metrics.positivePercentage)}`}>{metrics.positivePercentage.toFixed(1)}%</CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Confiança Média</CardTitle></CardHeader>
-          <CardContent className={`text-2xl font-bold ${confidenceColor(metrics.confidenceAvg)}`}>{metrics.confidenceAvg.toFixed(2)}</CardContent>
-        </Card>
+        {/* Removed Confiança card as requested */}
       </div>
 
       {/* Filtros */}
@@ -439,7 +436,7 @@ export default function NoticiasPage() {
                   </div>
                   <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">{n.content ?? n.summary}</p>
                   <div className="flex items-center justify-between gap-3">
-                    <small className="text-muted-foreground">Confiança: {n.confidence_score.toFixed(2)}</small>
+
                     <div className="w-40">
                       <Progress value={Math.round(n.confidence_score * 100)} className="h-1.5" indicatorClassName={sentimentBar(n.sentiment_score)} />
                     </div>
@@ -734,3 +731,4 @@ export default function NoticiasPage() {
     </div>
   );
 }
+
