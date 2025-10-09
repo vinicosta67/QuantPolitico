@@ -1,8 +1,8 @@
-﻿/**
- * @file Generates a detailed, actionable plan for a given recommendations tab
- * using the same Genkit + OpenAI pattern as other flows in this repo.
- */
 'use server';
+/**
+ * Generate an actionable recommendation plan using Genkit + OpenAI.
+ * Includes a strict fallback to prevent JSON parse errors from breaking the UI.
+ */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import type { RecType, Timeframe, Recommendation } from '@/lib/recommendations-mock';
@@ -18,7 +18,7 @@ const PlanActionSchema = z.object({
 });
 
 const PlanTimelineItemSchema = z.object({
-  label: z.string().describe('Phase or time window label (e.g., Semana 1-2)'),
+  label: z.string(),
   deliverables: z.array(z.string()).min(1),
 });
 
@@ -26,7 +26,6 @@ const GeneratePlanInputSchema = z.object({
   politician: z.string(),
   type: z.custom<RecType>(),
   timeframe: z.custom<Timeframe>(),
-  // Grounding items from the current tab to contextualize the plan
   items: z
     .array(
       z.object({
@@ -48,21 +47,13 @@ const GeneratePlanInputSchema = z.object({
 export type GeneratePlanInput = z.infer<typeof GeneratePlanInputSchema>;
 
 const GeneratePlanOutputSchema = z.object({
-  title: z.string().describe('Concise plan title for the PDF heading'),
-  summary: z
-    .string()
-    .describe(
-      'One-paragraph executive summary contextualized to the politician, timeframe, and tab focus.'
-    ),
-  objectives: z.array(z.string()).min(1).describe('Top 3â€“5 measurable objectives.'),
-  actions: z.array(PlanActionSchema).min(2).describe('Concrete actions with steps, owners, and KPIs.'),
-  // Allow at least one item from the model; we will pad to >=2 after receipt
-  timeline: z.array(PlanTimelineItemSchema).min(1).describe('Phased timeline with deliverables.'),
-  risks: z.array(z.string()).min(1).describe('Key risks and mitigations (brief).'),
-  monitoring: z
-    .array(z.string())
-    .min(1)
-    .describe('What to monitor weekly and how to decide next steps.'),
+  title: z.string(),
+  summary: z.string(),
+  objectives: z.array(z.string()).min(1),
+  actions: z.array(PlanActionSchema).min(2),
+  timeline: z.array(PlanTimelineItemSchema).min(1),
+  risks: z.array(z.string()).min(1),
+  monitoring: z.array(z.string()).min(1),
   competitiveStrategies: z
     .array(
       z.object({ competitor: z.string(), insights: z.array(z.string()).default([]), recommended: z.array(z.string()).min(1) })
@@ -77,72 +68,84 @@ const prompt = ai.definePrompt({
   output: { schema: GeneratePlanOutputSchema },
   model: 'openai/gpt-4o-mini',
   tools: [fetchPoliticalNews, fetchOnlinePoliticalNews, fetchOnlinePoliticalNewsStatus],
-  prompt: `VocÃª Ã© um(a) estrategista polÃ­tico(a) sÃªnior e engenheiro(a) de prompts especialista em integrar IA com TypeScript.
+  prompt: `Você é um(a) estrategista político(a) sênior e engenheiro(a) de prompts.
 
-Gere um PLANO DE AÃ‡ÃƒO objetivo, acionÃ¡vel e orientado a resultados para a aba "{{{type}}}" do mÃ³dulo de RecomendaÃ§Ãµes, considerando:
-- PolÃ­tico: {{{politician}}}
-- Janela de tempo: {{{timeframe}}}
-- RecomendaÃ§Ãµes ativas neste contexto (itens de grounding):
-{{#each items}}
-- [{{priority}} | impacto {{impact_score}} | {{category}}] {{title}} â€” {{description}}
-  {{#if evidence}}EvidÃªncia: {{evidence}}{{/if}}
-  {{#if actions}}AÃ§Ãµes sugeridas: {{actions}}{{/if}}
-{{/each}}
-
-InstruÃ§Ãµes:
-1) Contextualize o plano ao cenÃ¡rio brasileiro atual e Ã s caracterÃ­sticas do(a) {{{politician}}}.
-2) Foque no escopo da aba {{type}}: seja especÃ­fico sobre canais, mensagens, alvos e ritmos.
-3) Traga objetivos mensurÃ¡veis (KPIs e metas) e um cronograma por fases.
-4) Use linguagem clara, tÃ³picos curtos e aÃ§Ã£o explÃ­cita (â€œo que fazerâ€, â€œpor quemâ€, â€œquandoâ€, â€œcomo medirâ€).
-5) Antes de redigir, BUSQUE NOTÃCIAS RECENTES usando as ferramentas:
-   - fetchOnlinePoliticalNews (preferencial; varrer Ãºltimos 7 dias) e/ou fetchPoliticalNews (mock) como fallback.
-   - FaÃ§a pelo menos 3 consultas separadas: (a) "{{{politician}}} OR partido do(a) {{{politician}}}", (b) um(a) adversÃ¡rio(a) direto(a) e seu partido, (c) outro(a) adversÃ¡rio(a) relevante e seu partido.
-   - Compare tendÃªncias entre {{{politician}}} e concorrentes: temas em alta, riscos emergentes, oportunidades de agenda.
-   - NÃƒO inclua as notÃ­cias no JSON final; use-as para calibrar objetivos, aÃ§Ãµes, timeline e riscos.
-6) Respeite EXATAMENTE o schema de saÃ­da (JSON) indicado.
-`,
-  // Override: broader candidate coverage in news queries
-  prompt: `Você é um(a) estrategista político(a) sênior e engenheiro(a) de prompts especialista em integrar IA com TypeScript.
-
-Gere um PLANO DE AÇÃO objetivo, acionável e orientado a resultados para a aba "{{{type}}}" do módulo de Recomendações, considerando:
+Gere um PLANO DE AÇÃO objetivo, acionável e orientado a resultados para a aba "{{{type}}}" considerando:
 - Político: {{{politician}}}
 - Janela de tempo: {{{timeframe}}}
-- Recomendações ativas neste contexto (itens de grounding):
+- Itens (grounding):
 {{#each items}}
-- [{{priority}} | impacto {{impact_score}} | {{category}}] {{title}} — {{description}}
-  {{#if evidence}}Evidência: {{evidence}}{{/if}}
-  {{#if actions}}Ações sugeridas: {{actions}}{{/if}}
+- [{{priority}} | impacto {{impact_score}} | {{category}}] {{title}} - {{description}}
 {{/each}}
 
 Instruções:
-1) Contextualize o plano ao cenário brasileiro atual e às características do(a) {{{politician}}}.
-2) Foque no escopo da aba {{type}}: seja específico sobre canais, mensagens, alvos e ritmos.
-3) Traga objetivos mensuráveis (KPIs e metas) e um cronograma por fases.
-4) Use linguagem clara, tópicos curtos e ação explícita (“o que fazer”, “por quem”, “quando”, “como medir”).
-5) Antes de redigir, BUSQUE NOTÍCIAS RECENTES usando as ferramentas:
-   - fetchOnlinePoliticalNews (preferencial; varrer últimos 7 dias) e/ou fetchPoliticalNews (mock) como fallback.
-   - Faça pelo menos 3 consultas separadas: (a) "{{{politician}}} OR partido do(a) {{{politician}}}", (b) um(a) adversário(a) direto(a) e seu partido, (c) outro(a) adversário(a) relevante e seu partido.
-   - Além disso, cubra TODOS os candidatos visíveis no módulo de Recommendations para garantir comparação ampla: "Lula", "Bolsonaro", "Tarcísio", "Boulos" (se o atual selecionado for um deles, mantenha os demais). Para cada um, prefira a forma "NOME OR PARTIDO".
-   - Compare tendências entre {{{politician}}} e concorrentes: temas em alta, riscos emergentes, oportunidades de agenda.
-   - NÃO inclua as notícias no JSON final; use-as para calibrar objetivos, ações, timeline e riscos.
-6) Respeite EXATAMENTE o schema de saída (JSON) indicado.
+1) Contextualize ao cenário brasileiro atual e às características de {{{politician}}}.
+2) Foque no escopo da aba {{type}}: canais, mensagens, alvos, ritmos.
+3) Traga objetivos mensuráveis (KPIs/metas) e cronograma por fases.
+4) Antes de redigir, BUSQUE NOTÍCIAS RECENTES com as ferramentas disponíveis. NÃO inclua as notícias no JSON final.
+5) Respeite EXATAMENTE o schema e RETORNE SOMENTE JSON válido (sem markdown/comentários/trailing commas).
+`,
+});
+
+// Stricter fallback prompt when JSON parsing fails
+const fallbackPrompt = ai.definePrompt({
+  name: 'generateRecommendationPlanPrompt_fallback',
+  input: { schema: GeneratePlanInputSchema },
+  output: { schema: GeneratePlanOutputSchema },
+  model: 'openai/gpt-4o-mini',
+  tools: [fetchPoliticalNews, fetchOnlinePoliticalNews, fetchOnlinePoliticalNewsStatus],
+  prompt: `RETORNE APENAS JSON válido no schema indicado, sem texto extra.
+Político: {{{politician}}} | Aba: {{{type}}} | Janela: {{{timeframe}}}
+Itens:
+{{#each items}}
+- [{{priority}} | impacto {{impact_score}} | {{category}}] {{title}} - {{description}}
+{{/each}}
+Inclua objetivos, ações (com passos), timeline, riscos, monitoring e competitiveStrategies quando fizer sentido.
 `,
 });
 
 export async function generateRecommendationPlan(input: GeneratePlanInput): Promise<GeneratePlanOutput> {
-  const { output } = await prompt(input);
-  const plan = output!;
-  // Safety: ensure timeline has at least two phases for downstream consumers (PDF layout expectations)
+  let plan: GeneratePlanOutput | null = null;
+  try {
+    const { output } = await prompt(input);
+    plan = output!;
+  } catch (_e) {
+    try {
+      const { output } = await fallbackPrompt(input);
+      plan = output!;
+    } catch (__e) {
+      // Deterministic minimal fallback to avoid UI break
+      const first = input.items?.[0];
+      plan = {
+        title: `Plano inicial - ${input.type}`,
+        summary: `Rascunho automático para ${input.politician} (${input.type}, ${input.timeframe}). Ajuste após revisar notícias.`,
+        objectives: [
+          'Aumentar share of voice positivo',
+          'Reduzir riscos de narrativa negativa',
+          'Implementar rotina de monitoramento e resposta',
+        ],
+        actions: [
+          { title: 'Mensagens-chave', steps: ['Definir 3 mensagens por tema', 'Aprovar com comunicação'], owners: [], kpis: ['Alcance', 'Engajamento'] },
+          { title: 'Distribuição', steps: ['Publicar em redes', 'Press release regional'], owners: [], kpis: ['CTR', 'Tempo de resposta'] },
+        ],
+        timeline: [ { label: 'Semana 1', deliverables: ['Mensagens aprovadas', 'Publicações iniciais'] } ],
+        risks: ['Saturação de pauta', 'Ataques coordenados'],
+        monitoring: ['Volume e polaridade por tema', 'Tempo de resposta por canal'],
+        competitiveStrategies: first ? [{ competitor: 'Concorrente A', insights: [], recommended: ['Contraponto técnico', 'Conteúdo comparativo'] }] : [],
+      } as any;
+    }
+  }
+
+  // Safety: ensure timeline has at least two phases for downstream consumers
   if (!plan.timeline || plan.timeline.length < 2) {
     const base = plan.timeline?.[0];
     const filler: { label: string; deliverables: string[] } = base
       ? { label: base.label.includes('1') ? base.label.replace('1', '2') : `${base.label} (fase 2)`, deliverables: base.deliverables }
-      : { label: 'Fase 2', deliverables: ['Consolidar aprendizados e otimizar aÃ§Ãµes.'] };
+      : { label: 'Fase 2', deliverables: ['Consolidar aprendizados e otimizar ações.'] };
     plan.timeline = base ? [base, filler] : [{ label: 'Fase 1', deliverables: ['Kickoff e setup operacional.'] }, filler];
   }
-  return plan;
+  return plan as GeneratePlanOutput;
 }
 
 export type { RecType, Timeframe, Recommendation };
-
 

@@ -2,6 +2,7 @@
 import {fetchPoliticalNews} from '@/ai/tools/fetch-news';
 import {fetchParties as fetchPartiesTool} from '@/ai/tools/fetch-deputy-data'; // Renomeado para evitar conflito
 import type {NewsArticle, Party} from '@/lib/types';
+import { generateNewsReport, type GenerateNewsReportInput, type GenerateNewsReportOutput } from '@/ai/flows/generate-news-report';
 
 export async function searchNews(query?: string): Promise<(NewsArticle & { publishedAtLabel: string })[]> {
   try {
@@ -38,4 +39,8 @@ export async function getParties(): Promise<Party[]> {
     console.error('Error fetching parties:', error);
     return [];
   }
+}
+
+export async function generateNewsReportAction(input: GenerateNewsReportInput): Promise<GenerateNewsReportOutput> {
+  return generateNewsReport(input);
 }

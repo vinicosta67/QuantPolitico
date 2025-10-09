@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fetchRecommendations, fetchQuickStats } from "./actions";
 import { generateRecommendationPlanAction, fetchPlanNewsAction, type NewsGroup } from "./actions";
 import { planToPdfBytes } from "@/lib/plan-pdf";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type RecType = 'strategic' | 'media' | 'social'
 type Timeframe = 'day' | 'week' | 'month' | 'quarter'
@@ -41,6 +41,10 @@ export default function RecommendationsPage() {
   const [newsOpen, setNewsOpen] = React.useState(false)
   const [newsLoading, setNewsLoading] = React.useState(false)
   const [newsGroups, setNewsGroups] = React.useState<NewsGroup[]|null>(null)
+  const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [detailsLoading, setDetailsLoading] = React.useState(false)
+  const [detailsPlan, setDetailsPlan] = React.useState<any|null>(null)
+  const [detailsRec, setDetailsRec] = React.useState<any|null>(null)
 
   const load = React.useCallback(async ()=>{
     setLoading(true)
@@ -103,6 +107,21 @@ export default function RecommendationsPage() {
       setNewsLoading(false)
     }
   }, [politician, timeframe, lastPlan])
+
+  const handleOpenDetails = React.useCallback(async (rec: any) => {
+    try {
+      setDetailsRec(rec)
+      setDetailsOpen(true)
+      setDetailsLoading(true)
+      const plan = await generateRecommendationPlanAction({ politician, type: activeTab, timeframe, items: [rec] })
+      setDetailsPlan(plan as any)
+    } catch (e) {
+      console.error('Falha ao gerar detalhes', e)
+      setDetailsPlan(null)
+    } finally {
+      setDetailsLoading(false)
+    }
+  }, [politician, activeTab, timeframe])
 
   return (
     <div className="space-y-6">
@@ -203,7 +222,7 @@ export default function RecommendationsPage() {
                       <span>📅 Criado: {rec.created_date.replace('T',' ').slice(0,16)}</span>
                       <div className="flex gap-2">
                         <Button onClick={handleGeneratePdf} size="sm" variant="secondary" disabled={generating}> {generating ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Implementando…</>) :'✓ Implementar'}</Button>
-                        <Button size="sm" variant="secondary">📊 Detalhes</Button>
+                        <Button size="sm" variant="secondary" onClick={()=> handleOpenDetails(rec)}>📊 Detalhes</Button>
                         {/* <Button size="sm" variant="outline">📝 Nota</Button> */}
                       </div>
                     </div>
@@ -248,6 +267,52 @@ export default function RecommendationsPage() {
                   </ul>
                 </div>
               ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Details dialog */}
+      <Dialog open={detailsOpen} onOpenChange={(o)=> { setDetailsOpen(o); if(!o){ setDetailsPlan(null); setDetailsRec(null); }}}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhes da recomendação</DialogTitle>
+          </DialogHeader>
+          {detailsLoading && (
+            <div className="py-4 text-center text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>Carregando…</div>
+          )}
+          {!detailsLoading && detailsPlan && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-base font-semibold">{detailsPlan.title}</div>
+                <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{detailsPlan.summary}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Objetivos</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{detailsPlan.objectives?.map((o:string,i:number)=>(<li key={i}>{o}</li>))}</ul></CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Riscos</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{detailsPlan.risks?.map((r:string,i:number)=>(<li key={i}>{r}</li>))}</ul></CardContent></Card>
+              </div>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Ações</CardTitle></CardHeader>
+                <CardContent className="text-sm space-y-3">
+                  {detailsPlan.actions?.map((a:any, i:number)=> (
+                    <div key={i}>
+                      <div className="font-medium">{a.title}</div>
+                      <ul className="list-disc pl-5 space-y-1 mt-1">{a.steps?.map((s:string, si:number)=> (<li key={si}>{s}</li>))}</ul>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Timeline</CardTitle></CardHeader>
+                <CardContent className="text-sm space-y-2">
+                  {detailsPlan.timeline?.map((t:any, i:number)=> (
+                    <div key={i}>
+                      <div className="font-medium">{t.label}</div>
+                      <ul className="list-disc pl-5 space-y-1 mt-1">{t.deliverables?.map((d:string, di:number)=> (<li key={di}>{d}</li>))}</ul>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             </div>
           )}
         </DialogContent>

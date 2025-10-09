@@ -10,11 +10,12 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Search, RefreshCw, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { searchNews } from "./actions";
+import { searchNews, generateNewsReportAction } from "./actions";
 import { sendLatestNewsToWhatsApp } from "./whatsapp";
 import type { NewsArticle } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 
@@ -72,6 +73,17 @@ export default function NoticiasPage() {
   const [trends, setTrends] = React.useState<Trend[]>([]);
   const [searchForm, setSearchForm] = React.useState({ query: '', politician: 'all' as 'all'|'Lula'|'Bolsonaro'|'Tarcísio'|'Boulos', days: 7 as 1|7|30|90, sentiment: 'all' as 'all'|'positive'|'negative'|'neutral' });
   const [searchResults, setSearchResults] = React.useState<ExtendedNews[]>([]);
+
+  // Reports UI state
+  const [reportOpen, setReportOpen] = React.useState(false);
+  const [reportLoading, setReportLoading] = React.useState(false);
+  const [reportType, setReportType] = React.useState<'daily'|'weekly'|'custom'>('daily');
+  const [reportData, setReportData] = React.useState<null | {
+    title: string; timeframeLabel: string; summary: string;
+    keyMetrics: { total: number; avgSentiment: number; positivePct: number; topThemes: string[] };
+    highlights: string[]; risks: string[]; recommendations: string[];
+  }>(null);
+  const [customForm, setCustomForm] = React.useState({ query: '', days: 7 });
 
   const [filters, setFilters] = React.useState({
     query: "",
@@ -211,6 +223,27 @@ export default function NoticiasPage() {
     const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
   };
+
+  // Report actions
+  const openReport = React.useCallback(async (type: 'daily'|'weekly'|'custom', custom?: {query?: string; days?: number}) => {
+    try {
+      setReportType(type);
+      setReportOpen(true);
+      setReportLoading(true);
+      const input = {
+        type,
+        query: custom?.query ?? filters.query ?? '',
+        days: custom?.days ?? (type==='daily'?1:type==='weekly'?7:7),
+      } as any;
+      const data = await generateNewsReportAction(input);
+      setReportData(data as any);
+    } catch (e) {
+      console.error('Falha ao gerar relatório', e);
+      setReportData(null);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [filters.query]);
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -597,14 +630,64 @@ export default function NoticiasPage() {
 
             <TabsContent value="reports" className="mt-4">
               <div className="grid gap-4 md:grid-cols-3">
-                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Relatório Diário</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Análise das últimas 24h<Button className="mt-3" size="sm">Gerar</Button></CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Relatório Semanal</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Tendências e insights<Button className="mt-3" size="sm" variant="outline">Gerar</Button></CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Relatório Personalizado</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Parâmetros específicos<Button className="mt-3" size="sm" variant="outline">Configurar</Button></CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Relatório Diário</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Análise das últimas 24h <br></br><Button className="mt-3" size="sm" onClick={()=> openReport('daily')}>Gerar</Button></CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Relatório Semanal</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Tendências e insights <br></br><Button className="mt-3" size="sm" variant="outline" onClick={()=> openReport('weekly')}>Gerar</Button></CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Relatório Personalizado</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Parâmetros específicos <Button className="mt-3" size="sm" variant="outline" onClick={()=> setReportOpen(true) || setReportType('custom') || setReportData(null)}>Configurar</Button></CardContent></Card>
               </div>
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
+      {/* Report Dialog */}
+      <Dialog open={reportOpen} onOpenChange={(o)=>{ setReportOpen(o); if(!o){ setReportData(null); setReportLoading(false);} }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {reportType==='custom' ? 'Relatório Personalizado' : reportType==='daily' ? 'Relatório Diário' : 'Relatório Semanal'}
+            </DialogTitle>
+          </DialogHeader>
+          {reportType==='custom' && !reportData && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="q">Consulta (tema/político)</Label>
+                  <Input id="q" value={customForm.query} onChange={(e)=> setCustomForm(s=>({...s, query:e.target.value}))} placeholder="Inflação, PEC, STF..." />
+                </div>
+                <div>
+                  <Label htmlFor="d">Dias</Label>
+                  <Input id="d" type="number" min={1} max={30} value={customForm.days} onChange={(e)=> setCustomForm(s=>({...s, days: Math.max(1, Math.min(30, Number(e.target.value)||7))}))} />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={()=> openReport('custom', customForm as any)} disabled={reportLoading}>Gerar</Button>
+              </div>
+            </div>
+          )}
+          {reportLoading && (
+            <div className="py-6 text-center text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>Gerando relatório…</div>
+          )}
+          {reportData && !reportLoading && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm text-muted-foreground">{reportData.timeframeLabel}</div>
+                <div className="text-base font-semibold">{reportData.title}</div>
+                <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{reportData.summary}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Métricas</CardTitle></CardHeader><CardContent className="text-sm space-y-1">
+                  <div>Total: <strong>{reportData.keyMetrics.total}</strong></div>
+                  <div>Polaridade média: <strong>{reportData.keyMetrics.avgSentiment.toFixed(2)}</strong></div>
+                  <div>% positivas: <strong>{reportData.keyMetrics.positivePct.toFixed(1)}%</strong></div>
+                  <div>Top temas: {reportData.keyMetrics.topThemes.join(', ') || '-'}</div>
+                </CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Riscos</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{reportData.risks.map((r,i)=>(<li key={i}>{r}</li>))}</ul></CardContent></Card>
+              </div>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Destaques</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{reportData.highlights.map((h,i)=>(<li key={i}>{h}</li>))}</ul></CardContent></Card>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Ações Recomendadas</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{reportData.recommendations.map((h,i)=>(<li key={i}>{h}</li>))}</ul></CardContent></Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
