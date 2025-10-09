@@ -93,28 +93,58 @@ export const fetchDeputies = ai.defineTool(
   async (input) => {
     // If a specific name is provided, perform a targeted search
     if (input.name) {
-      const params = new URLSearchParams();
-      params.append('nome', input.name);
-      if (input.party) params.append('siglaPartido', input.party);
-      if (input.uf) params.append('siglaUf', input.uf);
-      params.append('ordem', 'ASC');
-      params.append('ordenarPor', 'nome');
-      
-      try {
-        // console.log(`Fetching specific deputy with params: ${params.toString()}`);
-        const response = await timedFetch(`https://dadosabertos.camara.leg.br/api/v2/deputados?${params.toString()}`, { next: { revalidate: 60 * 10 } });
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`API call failed with status: ${response.status}`, errorText);
-          throw new Error(`API call failed with status: ${response.status}`);
+      // Some queries with diacritics (e.g., João) may not match; try a few normalized variants
+      const stripAccents = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+      const original = input.name.trim();
+      const normalized = stripAccents(original);
+      const firstToken = original.split(/\s+/)[0] || original;
+      const firstTokenNorm = stripAccents(firstToken);
+      const attempts = Array.from(new Set([original, normalized, firstToken, firstTokenNorm])).filter(Boolean);
+
+      const results: any[] = [];
+      for (const nameAttempt of attempts) {
+        const params = new URLSearchParams();
+        params.append('nome', nameAttempt);
+        if (input.party) params.append('siglaPartido', input.party);
+        if (input.uf) params.append('siglaUf', input.uf);
+        params.append('ordem', 'ASC');
+        params.append('ordenarPor', 'nome');
+        try {
+          const response = await timedFetch(`https://dadosabertos.camara.leg.br/api/v2/deputados?${params.toString()}`, { next: { revalidate: 60 * 10 } });
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`API call failed with status: ${response.status}`, errorText);
+            continue;
+          }
+          const data = await response.json();
+          if (Array.isArray(data?.dados) && data.dados.length) {
+            results.push(...data.dados);
+            // If we already have hits, no need to try further variants
+            break;
+          }
+        } catch (error) {
+          console.error('Error fetching specific deputy attempt:', nameAttempt, error);
+          // try next attempt
         }
-        const data = await response.json();
-        // console.log(`Found ${data.dados.length} deputies for the specific search.`);
-        return data.dados;
-      } catch (error) {
-        console.error('Error fetching specific deputy:', error);
-        return [];
       }
+      // Deduplicate by id
+      const dedup = new Map<number, any>();
+      for (const d of results) dedup.set(d.id, d);
+      let finalList = Array.from(dedup.values());
+
+      // Fallback: if still empty, fetch the full list once and filter client-side (diacritics-insensitive)
+      if (finalList.length === 0) {
+        try {
+          const all = await fetchAllDeputies();
+          const nrm = (s: string) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+          const qn = nrm(original);
+          finalList = all.filter((d: any) => nrm(d.nome).includes(qn));
+        } catch (e) {
+          console.error('Fallback fetchAllDeputies failed:', e);
+        }
+      }
+
+      return finalList;
     }
 
     try {
