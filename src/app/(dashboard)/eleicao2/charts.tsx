@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import {
   Radar,
   RadarChart,
@@ -8,9 +10,26 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
 
 // --- Componente para os KPIs (IAp e IApP) ---
 export function KpiCard({ title, subtitle, value }: { title: string, subtitle: string, value: number }) {
@@ -55,7 +74,7 @@ export function GaugeChart({ value, change }: { value: number, change: number })
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-xl font-bold">ITS</CardTitle>
+        <CardTitle className="text-xl font-bold">Transferibilidade de votos</CardTitle>
         <p className="text-xs text-muted-foreground">(Transferibilidade de Votos)</p>
       </CardHeader>
       <CardContent className="flex flex-col items-center">
@@ -99,4 +118,200 @@ export function RadarChartComponent({ data }: { data: { tema: string, valor: num
       </RadarChart>
     </ResponsiveContainer>
   );
+}
+
+// --- Gráfico de Linhas: Comparação de Aprovação ---
+type ApprovalHistoryComparisonProps = {
+  cargo?: 'governador' | 'senador' | 'presidente'
+  estado?: 'sp' | 'rj' | 'mg' | 'ba'
+}
+
+// Deterministic PRNG igual ao usado em lib/election-mock.ts
+function seeded(seedStr: string) {
+  let seed = 0
+  for (let i = 0; i < seedStr.length; i++) {
+    seed = (seed * 31 + seedStr.charCodeAt(i)) >>> 0
+  }
+  return () => {
+    seed = (1664525 * seed + 1013904223) >>> 0
+    return seed / 0xffffffff
+  }
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n))
+}
+
+function monthLabels(count = 18) {
+  const labels: string[] = []
+  const today = new Date()
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    labels.push(d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }))
+  }
+  return labels
+}
+
+function availablePoliticiansFor(estado?: string, cargo?: string) {
+  if (cargo === 'presidente') {
+    // Lista de presidenciáveis conhecidos (rótulos para comparação fictícia)
+    const presidents = [
+      'Lula',
+      'Jair Bolsonaro',
+      'Ciro Gomes',
+      'Simone Tebet',
+      'Marina Silva',
+      'Sergio Moro',
+      'Guilherme Boulos',
+      'João Amoêdo',
+    ]
+    const rnd = seeded(`${estado}|${cargo}|names`)
+    return [...presidents].sort(() => (rnd() - 0.5))
+  }
+
+  const base = [
+    'Ana Silva',
+    'Bruno Costa',
+    'Carla Mendes',
+    'Diego Rocha',
+    'Eduarda Lima',
+    'Felipe Santos',
+    'Gabriela Nunes',
+    'Henrique Alves',
+    'Isabela Duarte',
+    'João Pereira',
+  ]
+  const rnd = seeded(`${estado}|${cargo}|names`)
+  return [...base].sort(() => (rnd() - 0.5))
+}
+
+function slug(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+function buildSeries(names: string[], seedKey: string, labels: string[]) {
+  const rngs = names.map((n) => ({ key: slug(n), label: n, rnd: seeded(`${seedKey}|${n}`), drift: (seeded(`${seedKey}|${n}|d`)() - 0.5) * 0.5 }))
+  const base = labels.map((_, i) => ({ idx: i, month: labels[i] }))
+  const data = base.map((b) => {
+    const row: Record<string, number | string> = { month: b.month }
+    rngs.forEach(({ key, rnd, drift }, k) => {
+      const phase = (k + 1) * 0.6
+      const wave = Math.sin((b.idx / (labels.length - 1)) * Math.PI * (1.2 + phase))
+      const noise = (rnd() - 0.5) * 6
+      const trend = (b.idx / (labels.length - 1)) * drift * 30
+      const value = clamp(50 + wave * 15 + trend + noise, 20, 85)
+      row[key] = Math.round(value)
+    })
+    return row
+  })
+  return data
+}
+
+export function ApprovalHistoryComparison({ cargo, estado }: ApprovalHistoryComparisonProps) {
+  const [search, setSearch] = React.useState('')
+  const allNames = React.useMemo(() => availablePoliticiansFor(estado, cargo), [estado, cargo])
+  const [selected, setSelected] = React.useState<string[]>(() => {
+    if (cargo === 'presidente') {
+      const preferred = ['Lula', 'Jair Bolsonaro'].filter((n) => allNames.includes(n))
+      if (preferred.length) return preferred
+    }
+    return allNames.slice(0, 2)
+  })
+  const filtered = React.useMemo(() => allNames.filter((n) => n.toLowerCase().includes(search.toLowerCase())), [allNames, search])
+  React.useEffect(() => {
+    const allSet = new Set(allNames)
+    const currentValid = selected.filter((n) => allSet.has(n))
+    if (cargo === 'presidente') {
+      const pref = ['Lula', 'Jair Bolsonaro'].filter((n) => allSet.has(n))
+      // Ajusta se mudou de cargo ou se seleção ficou inválida
+      if (pref.length && (currentValid.length !== selected.length || !selected.length || selected[0] !== pref[0])) {
+        setSelected(pref)
+        return
+      }
+    }
+    if (!selected.length || currentValid.length !== selected.length) {
+      setSelected(allNames.slice(0, 2))
+    }
+  }, [cargo, allNames])
+
+  const labels = React.useMemo(() => monthLabels(18), [])
+  const chartData = React.useMemo(() => buildSeries(selected, `${estado}|${cargo}|series`, labels), [selected, estado, cargo, labels])
+
+  const palette = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))']
+  const config = React.useMemo(() => {
+    const cfg: Record<string, { label: string; color: string }> = {}
+    selected.forEach((name, i) => {
+      cfg[slug(name)] = { label: name, color: palette[i % palette.length] }
+    })
+    return cfg
+  }, [selected])
+
+  const toggle = (name: string) => {
+    setSelected((prev) => {
+      if (prev.includes(name)) return prev.filter((n) => n !== name)
+      if (prev.length >= palette.length) return prev
+      return [...prev, name]
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle>Comparação do IAp por Político</CardTitle>
+          <p className="text-xs text-muted-foreground">Histórico mensal do índice de aprovação</p>
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="secondary" className="gap-2">
+              Selecionar políticos
+              <span className="rounded bg-primary/10 px-2 py-0.5 text-xs">{selected.length}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72">
+            <div className="space-y-3">
+              <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <div className="max-h-56 space-y-2 overflow-auto pr-1">
+                {filtered.map((name) => (
+                  <label key={name} className="flex cursor-pointer items-center gap-2">
+                    <Checkbox checked={selected.includes(name)} onCheckedChange={() => toggle(name)} id={`p-${name}`} />
+                    <span className="text-sm">{name}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground">Selecione até 5 políticos para comparar</div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {selected.map((n, i) => (
+            <Badge key={n} variant="outline" className="cursor-default" style={{ borderColor: 'hsl(var(--border))' }}>
+              <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: palette[i % palette.length] }} />
+              {n}
+            </Badge>
+          ))}
+        </div>
+
+        <ChartContainer config={config} className="h-[300px] w-full">
+          <LineChart data={chartData} margin={{ left: 8, right: 12, top: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="month" tickLine={false} axisLine={false} />
+            <YAxis domain={[20, 85]} tickLine={false} axisLine={false} width={28} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            {selected.map((name) => (
+              <Line key={name} type="monotone" dataKey={slug(name)} stroke={`var(--color-${slug(name)})`} dot={false} strokeWidth={2.25} />
+            ))}
+            <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+          </LineChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  )
 }

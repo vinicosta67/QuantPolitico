@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { fetchElectionData, runScenario } from './actions';
-import { GaugeChart, KpiCard, RadarChartComponent } from './charts';
+import { GaugeChart, KpiCard, RadarChartComponent, ApprovalHistoryComparison } from './charts';
 
 type ElectionData = Awaited<ReturnType<typeof fetchElectionData>>;
 
@@ -134,6 +134,9 @@ export default function Eleicao2Page() {
       ) : (
         data && (
           <>
+            {/* Comparação de aprovação (linha) */}
+            <ApprovalHistoryComparison cargo={cargo} estado={estado} />
+
             {/* KPIs e Gauge */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <KpiCard title="IAp" subtitle="(Aprovação - Político/UF)" value={data.kpis.iap} />

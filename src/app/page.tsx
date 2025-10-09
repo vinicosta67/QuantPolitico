@@ -60,7 +60,7 @@ export default function Home() {
             <Card className="backdrop-blur supports-[backdrop-filter]:bg-background/80">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <LineChartIcon className="h-5 w-5 text-primary" /> Tendência de Aprovação
+                  <LineChartIcon className="h-5 w-5 text-primary" /> Intenção de votos
                 </CardTitle>
               </CardHeader>
               <CardContent>

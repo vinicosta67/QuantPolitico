@@ -155,9 +155,9 @@ export default function RecommendationsPage() {
             {/* <Button size="sm" onClick={handleGeneratePdf} disabled={generating || loading}>
               {generating ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Gerando PDF…</>) : 'Gerar Plano (PDF)'}
             </Button> */}
-            {/* <Button size="sm" variant="outline" onClick={handleViewNews} disabled={newsLoading}>
+            <Button size="sm" variant="outline" onClick={handleViewNews} disabled={newsLoading}>
               {newsLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Carregando…</>) : 'Ver notícias usadas'}
-            </Button> */}
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

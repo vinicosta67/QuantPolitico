@@ -101,7 +101,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Indicadores consolidados */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>IAp Médio</CardTitle></CardHeader>
           <CardContent><div className={`text-3xl font-bold ${ratioColor(iapAvgVal)}`}>{iapAvg}</div><CardDescription>Índice de Aprovação</CardDescription></CardContent>
@@ -110,7 +110,7 @@ export default function DashboardPage() {
           <CardHeader><CardTitle>IBS Médio</CardTitle></CardHeader>
           <CardContent><div className={`text-3xl font-bold ${ratioColor(ibsAvgVal)}`}>{ibsAvg}</div><CardDescription>Bem-estar Social</CardDescription></CardContent>
         </Card>
-      </div>
+      </div> */}
 
       {/* Rodapé */}
       <div className="text-center text-muted-foreground"><small>Última atualização: {data?.overview.updatedAtLabel ?? '-'}</small></div>
