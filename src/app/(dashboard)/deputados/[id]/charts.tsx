@@ -36,7 +36,7 @@ export function PopularityChart({ data }: { data: PopularityData }) {
 
     return (
         <Card>
-            <CardHeader><CardTitle className="text-base font-medium">Popularidade</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base font-medium">Popularidade (Redes Sociais)</CardTitle></CardHeader>
             <CardContent>
                 <div className="relative h-48 w-full flex flex-col items-center justify-center">
                     {/* O Gráfico */}
@@ -76,7 +76,7 @@ export function PopularityChart({ data }: { data: PopularityData }) {
 export function ApprovalChart({ data }: { data: TimeSeriesData[] }) {
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base font-medium">Aprovação</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base font-medium">Aprovação (Mídias Formais)</CardTitle></CardHeader>
       <CardContent className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 0 }}>
@@ -91,24 +91,6 @@ export function ApprovalChart({ data }: { data: TimeSeriesData[] }) {
             <Tooltip />
             <Area type="monotone" dataKey="value" stroke="#8884d8" fillOpacity={1} fill="url(#colorUv)" />
           </AreaChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function SentimentChart({ data }: { data: TimeSeriesData[] }) {
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base font-medium">Análise de Sentimento</CardTitle></CardHeader>
-      <CardContent className="h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 0 }}>
-            <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis fontSize={12} tickLine={false} axisLine={false} />
-            <Tooltip cursor={{fill: 'transparent'}} />
-            <Bar dataKey="value" fill="#82ca9d" radius={[4, 4, 0, 0]} />
-          </BarChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>

@@ -9,6 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { fetchPoliticalNews } from '../tools/fetch-news';
+import { fetchOnlinePoliticalNews } from '../tools/fetch-online-news';
 
 const SimulateScenarioInputSchema = z.object({
   hypothesis: z.string().describe('The hypothetical event or scenario to be simulated. E.g., "Lançamento de uma nova propaganda focada em segurança"'),
@@ -36,7 +37,7 @@ const prompt = ai.definePrompt({
   output: { schema: SimulateScenarioOutputSchema },
   // Use a cost-efficient model for simulations
   model: 'openai/gpt-4o-mini',
-  tools: [fetchPoliticalNews],
+  tools: [fetchOnlinePoliticalNews],
   prompt: `Você é um estrateista político sênior e um analista de dados especialista. Sua tarefa é simular o impacto de um evento hipotético nos principais indicadores de uma campanha eleitoral.
 
 O cenário eleitoral atual é uma disputa acirrada entre Lula e Tarcísio para a presidência.
@@ -45,7 +46,7 @@ Analise a seguinte hipótese com profundidade:
 "{{{hypothesis}}}"
 
 Para isso, siga os seguintes passos:
-1.  **Busque Contexto:** Use a ferramenta \`fetchPoliticalNews\` para encontrar notícias recentes que possam dar contexto à sua análise. Pesquise por termos relacionados à hipótese.
+1.  **Busque Contexto:** Use a ferramenta \`fetchOnlinePoliticalNews\` para encontrar notícias recentes que possam dar contexto à sua análise. Pesquise por termos relacionados à hipótese.
 2.  **Analise o Impacto:** Elabore uma análise textual rica e detalhada. Não se limite a dizer "o impacto é positivo". Explique as razões, o público-alvo que seria mais ou menos impactado, as possíveis reações da campanha adversária e da mídia. Seja um verdadeiro especialista.
 3.  **Simule os KPIs:** Preveja o impacto quantitativo nos seguintes KPIs. Seja realista e utilize unidades claras (ex: %, pts).
     *   'Δ Intenção de Voto (Lula)': Variação na intenção de voto estimulada para Lula.

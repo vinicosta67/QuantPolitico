@@ -35,7 +35,7 @@ export function ChatClient() {
     setIsLoading(true);
 
     try {
-        console.log('newMessages,skuce: ', newMessages.slice(-5))
+        // console.log('newMessages,skuce: ', newMessages.slice(-5))
         const aiResponse = await getAiResponse(newMessages.slice(-5)); // Send last 5 messages for context
         
         const newAiMessage: Message = {

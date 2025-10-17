@@ -10,6 +10,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { fetchPoliticalNews } from '@/ai/tools/fetch-news';
 import { fetchDeputies, fetchDeputyExpenses, fetchParties } from '@/ai/tools/fetch-deputy-data';
+import { fetchOnlinePoliticalNews } from '../tools/fetch-online-news';
 
 const InteractWithPoliticalAnalystInputSchema = z.object({
   query: z.string().describe('The user query for the political analyst.'),
@@ -30,13 +31,13 @@ const prompt = ai.definePrompt({
   input: {schema: InteractWithPoliticalAnalystInputSchema},
   output: {schema: InteractWithPoliticalAnalystOutputSchema},
   model: 'openai/gpt-4o',
-  tools: [fetchPoliticalNews, fetchDeputies, fetchDeputyExpenses, fetchParties],
+  tools: [fetchOnlinePoliticalNews, fetchDeputies, fetchDeputyExpenses, fetchParties],
   prompt: `Você é um analista político especialista e um cientista de dados. Sua função é fornecer respostas detalhadas, precisas e baseadas em dados.
 
 Use as ferramentas disponíveis para buscar informações em tempo real e enriquecer sua análise. Não responda apenas com a informação direta; interprete os dados, aponte tendências, e forneça um contexto valioso. Seja proativo.
 
 Ferramentas disponíveis:
-- fetchPoliticalNews: Busca notícias políticas recentes do Brasil. Use para contextualizar eventos.
+- fetchOnlinePoliticalNews: Busca notícias políticas recentes do Brasil. Use para contextualizar eventos.
 - fetchDeputies: Busca informações sobre deputados federais brasileiros. Pode filtrar por nome, partido e UF.
 - fetchDeputyExpenses: Busca despesas de um deputado específico. Use para analisar gastos.
 - fetchParties: Busca informações sobre partidos políticos brasileiros.

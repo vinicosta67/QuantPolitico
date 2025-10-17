@@ -39,7 +39,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">Dashboard</h2>
+        <h2 className="text-2xl font-semibold">Visão Geral</h2>
         <p className="text-muted-foreground">Visão geral do sistema de inteligência política</p>
       </div>
 

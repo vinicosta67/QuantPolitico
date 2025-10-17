@@ -39,24 +39,26 @@ export default async function DeputyDetailPage({ params }: { params: { id: strin
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <PopularityChart data={analytics.popularidade} />
+                
                 <ApprovalChart data={analytics.aprovacao} />
-                <SentimentChart data={analytics.analiseSentimento} />
-                <Card className="lg:col-span-1">
-                    <CardHeader><CardTitle className="text-base font-medium">Tendências Narrativas</CardTitle></CardHeader>
-                    <CardContent className="space-y-2">
-                        {analytics.tendenciasNarrativas.map(tema => (
-                            <div key={tema} className="text-sm p-2 bg-gray-100 rounded">{tema}</div>
+
+                <Card className="lg:col-span-2">
+                    <CardHeader><CardTitle>Notícias</CardTitle></CardHeader>
+                    <CardContent>
+                        {analytics.noticias.map(news => (
+                             <NewsItem key={news.title} {...news} />
                         ))}
                     </CardContent>
                 </Card>
             </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle>Notícias</CardTitle></CardHeader>
-                    <CardContent>
-                        {analytics.noticias.map(news => (
-                             <NewsItem key={news.title} {...news} />
+                
+                <Card className="lg:col-span-1">
+                    <CardHeader><CardTitle className="text-base font-medium">Tendências Narrativas</CardTitle></CardHeader>
+                    <CardContent className="space-y-2">
+                        {analytics.tendenciasNarrativas.map(tema => (
+                            <div key={tema} className="text-sm p-2 bg-gray-100 rounded">{tema}</div>
                         ))}
                     </CardContent>
                 </Card>

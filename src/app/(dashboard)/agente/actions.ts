@@ -10,7 +10,7 @@ export async function getAiResponse(history: {role: 'user' | 'assistant', conten
     return result.response;
   } catch (error) {
     console.error("Error interacting with political analyst AI:", error);
-    console.log("Error interacting with political analyst AI:", error)
+    // console.log("Error interacting with political analyst AI:", error)
     return "Desculpe, não consegui processar sua solicitação no momento. Tente novamente mais tarde.";
   }
 }

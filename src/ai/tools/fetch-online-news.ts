@@ -33,31 +33,44 @@ export const fetchOnlinePoliticalNews = ai.defineTool(
       })
     ),
   },
-  async (input) => {
+  async (input):Promise<any> => {
     const days = input.days ?? 7;
     const timespan = `${days}d`;
-    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(
-      input.query
-    )}&timespan=${timespan}&mode=ArtList&maxrecords=50&format=json&sort=datedesc`;
+    // const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(
+    //   input.query
+    // )}&timespan=${timespan}&mode=ArtList&maxrecords=50&format=json&sort=datedesc`;
+    // console.log('resultadoooo: ', result)
+    const url = `https://trademachine.blob.core.windows.net/base-dados/noticias_politica_broadcast.json`;
     try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      const res = await fetch(url, { method:'GET',  redirect:'follow',headers: {Accept: 'application/json' } });
       if (!res.ok) throw new Error(`GDELT status ${res.status}`);
-      const data = await res.json();
-      const articles: any[] = data?.articles ?? data?.docs ?? [];
-      const items = articles
-        .map((a) => ({
-          title: a.title || a.source || 'Sem título',
-          source: a.sourceCommonName || a.domain || a.source || 'GDELT',
+      const data: any = await res.json();
+
+      const pubDate = Object.values(data?.pubDate)
+      const id = Object.values(data?.id)
+      const sentiment = Object.values(data?.sentiment)
+      const title = Object.values(data?.title)
+      const content = Object.values(data?.content)
+      const description = Object.values(data?.description)
+
+      // const articles: any[] = data?.title ?? data?.docs ?? [];
+      const items = id
+        .map((a:any, pos:any) => ({
+          id: a,
+          title: title[pos] || a.source || 'Sem título',
+          source: a.sourceCommonName || a.domain || a.source || 'Broadcast',
           url: a.url || '',
-          summary:
-            a.excerpt || a.translingual || a.kw || a.title || 'Sem resumo disponível.',
-          publishedAt: String(a.seendate || a.date || a.publishedAt || ''),
+          // content: content[pos],
+          setiment: sentiment[pos],
+          summary: description[pos] || a.translingual || a.kw || a.title || 'Sem resumo disponível.',
+          publishedAt: String(pubDate[pos] || a.date || a.publishedAt || ''),
         }))
-        .filter((x) => x.url);
+
+      console.log('items: ', items)
+      // return {items: items, summaries: description};
       return items;
     } catch (err) {
       console.error('fetchOnlinePoliticalNews error', err);
-      // Fallback seguro: não falhar o fluxo, apenas retornar vazio
       return [];
     }
   }

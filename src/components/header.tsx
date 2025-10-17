@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: BarChart2 },
+  { href: "/dashboard", label: "Visão Geral", icon: BarChart2 },
   { href: "/governo", label: "Governo", icon: Landmark },
   { href: "/deputados", label: "Deputados", icon: Users },
   { href: "/temas", label: "Temas", icon: Tags },

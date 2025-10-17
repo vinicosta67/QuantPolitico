@@ -23,8 +23,11 @@ export const fetchPoliticalNews = ai.defineTool(
     })),
   },
   async (input) => {
-    console.log(`(MOCK) Fetching news with query: ${input.query}`);
-    
+    // console.log(`(MOCK) Fetching news with query: ${input.query}`);
+    const response = fetch('https://trademachine.blob.core.windows.net/base-dados/noticias_politica_broadcast.json')
+    const result = (await response).json()
+    // console.log('result: ', result)
+
     const allNews = [
         { id: '1', title: 'Lula defende reforma tributária em evento com empresários', source: 'Valor Econômico', summary: 'Presidente afirma que a reforma é essencial para o crescimento do país e promete diálogo com o Congresso.', url: '#lula-reforma', publishedAt: new Date(Date.now() - 1 * 3600 * 1000).toISOString() },
         { id: '2', title: 'Tarcísio critica proposta de imposto único e defende modelo dual', source: 'Folha de S.Paulo', summary: 'Governador de São Paulo aponta riscos da proposta federal e apresenta alternativas em debate sobre a reforma tributária.', url: '#tarcisio-reforma', publishedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString() },

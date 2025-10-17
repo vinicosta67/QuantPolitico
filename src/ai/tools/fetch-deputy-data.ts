@@ -341,7 +341,7 @@ export const fetchParties = ai.defineTool(
       }),
     },
     async (input) => {
-      console.log(`Simulating election data for:`, input);
+      // console.log(`Simulating election data for:`, input);
   
       const rand = (min: number, max: number, decimals = 0) => {
           const str = (Math.random() * (max - min) + min).toFixed(decimals);
@@ -403,7 +403,7 @@ export const fetchParties = ai.defineTool(
   
       try {
         const deputyDataStr = JSON.stringify(deputyData, null, 2);
-        console.log(`[Flow] Enviando ${deputyDataStr.length} caracteres para a IA... lalalal`);
+        // console.log(`[Flow] Enviando ${deputyDataStr.length} caracteres para a IA... lalalal`);
   
         const { output } = await analystPrompt({
           deputyDataStr,

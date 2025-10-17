@@ -22,7 +22,7 @@ export async function generateRecommendationPlanAction(params: {
   timeframe: Timeframe;
   items: Recommendation[];
 }): Promise<GeneratePlanOutput> {
-  // Proxy to AI flow; keeps client-side code light and consistent with other flows
+
   return generateRecommendationPlan(params);
 }
 
@@ -43,7 +43,6 @@ export async function fetchPlanNewsAction(params: {
   competitors?: string[];
 }): Promise<NewsGroup[]> {
   const days = timeframeToDays(params.timeframe);
-  // Base list of candidates visible/used in the Recommendations tab UI
   const DEFAULT_CANDIDATES = [
     'Lula',
     'Bolsonaro',
@@ -51,7 +50,6 @@ export async function fetchPlanNewsAction(params: {
     'Boulos',
   ];
 
-  // Merge: selected politician + competitors from the generated plan + other candidates from the tab
   const queries = Array.from(
     new Set(
       [
@@ -63,6 +61,7 @@ export async function fetchPlanNewsAction(params: {
         .filter(Boolean)
     )
   );
+
   const results: NewsGroup[] = [];
   for (const q of queries) {
     try {

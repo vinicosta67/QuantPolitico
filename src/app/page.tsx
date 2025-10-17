@@ -44,7 +44,7 @@ export default function Home() {
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">
                 <Link href="/dashboard">
-                  Acessar Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+                  Acessar Visão Geral <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
@@ -152,7 +152,7 @@ export default function Home() {
           </div>
           <div className="flex gap-3">
             <Button asChild>
-              <Link href="/dashboard">Abrir Dashboard</Link>
+              <Link href="/dashboard">Abrir Visão Geral</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/register">Criar conta</Link>

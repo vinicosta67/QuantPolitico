@@ -96,7 +96,7 @@ export default function TemasPage() {
         {/* Feed de notícias por tema */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Artigos sobre: {selectedTheme}</CardTitle>
+            <CardTitle>Notícias classificadas: {selectedTheme}</CardTitle>
             <CardDescription>Selecione um tema para ver as notícias recentes (mock).</CardDescription>
           </CardHeader>
           <CardContent>
