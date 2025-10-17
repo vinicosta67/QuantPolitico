@@ -30,6 +30,7 @@ export const fetchOnlinePoliticalNews = ai.defineTool(
         url: z.string(),
         summary: z.string(),
         publishedAt: z.string(),
+        sentiment: z.number().int().min(1).max(3).optional(),
       })
     ),
   },
@@ -61,7 +62,7 @@ export const fetchOnlinePoliticalNews = ai.defineTool(
           source: a.sourceCommonName || a.domain || a.source || 'Broadcast',
           url: a.url || '',
           // content: content[pos],
-          setiment: sentiment[pos],
+          sentiment: Number(sentiment[pos]) || undefined,
           summary: description[pos] || a.translingual || a.kw || a.title || 'Sem resumo disponível.',
           publishedAt: String(pubDate[pos] || a.date || a.publishedAt || ''),
         }))
@@ -75,4 +76,3 @@ export const fetchOnlinePoliticalNews = ai.defineTool(
     }
   }
 );
-

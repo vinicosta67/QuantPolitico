@@ -19,16 +19,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 
-type ExtendedNews = (NewsArticle & { publishedAtLabel: string }) & {
+type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
   sentiment_score: number;
-  confidence_score: number;
-  category: "economia" | "saude" | "educacao" | "seguranca";
-  politicians_mentioned: string[];
-  emotion_primary: "alegria" | "raiva" | "tristeza" | "neutro";
+  sentimentRaw?: number;
+  confidence_score?: number;
+  category?: "economia" | "saude" | "educacao" | "seguranca";
+  politicians_mentioned?: string[];
+  emotion_primary?: "alegria" | "raiva" | "tristeza" | "neutro";
   content?: string;
 };
 
-function enrichNews(items: (NewsArticle & { publishedAtLabel: string })[]): ExtendedNews[] {
+function enrichNewsMock(items: (NewsArticle & { publishedAtLabel: string })[]): ExtendedNews[] {
   const categories = ["economia", "saude", "educacao", "seguranca"] as const;
   const politicians = ["Lula", "Bolsonaro", "Tarcísio", "Boulos"];
   return items.map((n, idx) => {
@@ -51,28 +52,55 @@ function enrichNews(items: (NewsArticle & { publishedAtLabel: string })[]): Exte
   });
 }
 
+// Real extension: uses raw sentiment 1..3 from server
+function enrichNews(items: (NewsArticle & { publishedAtLabel: string; sentimentValue?: number })[]): ExtendedNews[] {
+  const mapRaw = (raw?: number) => raw === 1 ? -1 : raw === 3 ? 1 : 0;
+  return items.map((n) => {
+    const raw = (n as any).sentimentValue as number | undefined;
+    return {
+      ...n,
+      sentimentRaw: raw,
+      sentiment_score: mapRaw(raw),
+      content: n.summary,
+    };
+  });
+}
+
 export default function NoticiasPage() {
   const { toast } = useToast();
   const [allNews, setAllNews] = React.useState<ExtendedNews[]>([]);
   const [filteredNews, setFilteredNews] = React.useState<ExtendedNews[]>([]);
+  const [feedPage, setFeedPage] = React.useState(1);
+  const [feedPageSize, setFeedPageSize] = React.useState<5|10|20|100>(10);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState<'analysis'|'search'|'trends'|'monitoring'|'reports'>('analysis');
 
-  // Monitor page states (mock)
-  const [systemMetrics, setSystemMetrics] = React.useState({
-    total_news: 305,
-    total_politicians: 512,
-    total_analysis: 1686,
-    avg_sentiment: 0.3,
-    positive_percentage: 62.4,
-    categories: 12,
-  });
+  // Metrics for monitor derived from loaded news
+  const systemMetrics = React.useMemo(() => {
+    const total = allNews.length || 0;
+    const avg = total ? allNews.reduce((s, n) => s + (n.sentiment_score || 0), 0) / total : 0;
+    const positive = allNews.filter(n => (n.sentiment_score || 0) > 0).length;
+    const negative = allNews.filter(n => (n.sentiment_score || 0) < 0).length;
+    const positivePct = total ? (positive / total) * 100 : 0;
+    return {
+      total_news: total,
+      total_politicians: 0,
+      total_analysis: total,
+      avg_sentiment: avg,
+      positive_percentage: positivePct,
+      categories: 0,
+      positive_count: positive,
+      negative_count: negative,
+    } as any;
+  }, [allNews]);
   type Trend = { date: string; news_count: number; avg_sentiment: number; positive_count: number; negative_count: number };
   const [trends, setTrends] = React.useState<Trend[]>([]);
   const [searchForm, setSearchForm] = React.useState({ query: '', politician: 'all' as 'all'|'Lula'|'Bolsonaro'|'Tarcísio'|'Boulos', days: 7 as 1|7|30|90, sentiment: 'all' as 'all'|'positive'|'negative'|'neutral' });
   const [searchResults, setSearchResults] = React.useState<ExtendedNews[]>([]);
+  const [searchPage, setSearchPage] = React.useState(1);
+  const [searchPageSize, setSearchPageSize] = React.useState<5|10|20|100>(10);
 
   // Reports UI state
   const [reportOpen, setReportOpen] = React.useState(false);
@@ -90,7 +118,7 @@ export default function NoticiasPage() {
     category: "all",
     sentiment: "all",
     politician: "all",
-    hours: 24 as 6 | 12 | 24 | 48 | 168,
+    hours: 168 as 6 | 12 | 24 | 48 | 168,
   });
 
   const loadNews = React.useCallback(async () => {
@@ -113,20 +141,30 @@ export default function NoticiasPage() {
     loadNews();
   }, [loadNews]);
 
-  // Build trends mock once
+  // Build trends from real news (group by day)
   React.useEffect(() => {
-    const now = new Date();
-    const arr: Trend[] = Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(now.getTime() - (6 - i) * 24 * 3600 * 1000);
-      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      const news_count = Math.floor(30 + Math.random()*50);
-      const avg_sentiment = parseFloat((Math.random()*2 - 1).toFixed(2));
-      const positive_count = Math.floor(news_count * (0.4 + Math.random()*0.3));
-      const negative_count = Math.max(1, Math.floor(news_count * (0.15 + Math.random()*0.2)));
-      return { date, news_count, avg_sentiment, positive_count, negative_count };
-    });
+    const map = new Map<string, { sum: number; count: number; pos: number; neg: number }>();
+    for (const n of allNews) {
+      const d = new Date(n.publishedAt);
+      if (isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const cur = map.get(key) || { sum: 0, count: 0, pos: 0, neg: 0 };
+      cur.sum += n.sentiment_score || 0;
+      cur.count += 1;
+      if ((n.sentiment_score || 0) > 0) cur.pos += 1; else if ((n.sentiment_score || 0) < 0) cur.neg += 1;
+      map.set(key, cur);
+    }
+    const arr: Trend[] = Array.from(map.entries())
+      .sort((a, b) => a[0] < b[0] ? -1 : 1)
+      .map(([date, v]) => ({
+        date,
+        news_count: v.count,
+        avg_sentiment: v.count ? parseFloat((v.sum / v.count).toFixed(2)) : 0,
+        positive_count: v.pos,
+        negative_count: v.neg,
+      }));
     setTrends(arr);
-  }, []);
+  }, [allNews]);
 
   React.useEffect(() => {
     let id: any;
@@ -137,7 +175,11 @@ export default function NoticiasPage() {
   React.useEffect(() => {
     let items = [...allNews];
     const cutoff = Date.now() - filters.hours * 3600 * 1000;
-    items = items.filter(n => new Date(n.publishedAt).getTime() >= cutoff);
+    items = items.filter(n => {
+      const t = new Date(n.publishedAt).getTime();
+      if (isNaN(t)) return true; // se não soubermos a data, não exclua
+      return t >= cutoff;
+    });
     if (filters.query.trim()) {
       const q = filters.query.toLowerCase();
       items = items.filter(n => n.title.toLowerCase().includes(q) || n.summary?.toLowerCase().includes(q));
@@ -148,11 +190,13 @@ export default function NoticiasPage() {
     if (filters.sentiment === 'negative') items = items.filter(n => n.sentiment_score < -0.1);
     if (filters.politician !== 'all') items = items.filter(n => n.politicians_mentioned?.includes(filters.politician));
     setFilteredNews(items);
+    setFeedPage(1);
   }, [allNews, filters]);
 
   const sentimentColor = (score: number) => score > 0.2 ? 'text-green-600' : score < -0.2 ? 'text-red-600' : 'text-yellow-600';
-  const sentimentBar = (score: number) => score > 0.2 ? 'bg-emerald-500' : score < -0.2 ? 'bg-red-500' : 'bg-yellow-500';
+  const sentimentColorRaw = (raw?: number) => raw === 3 ? 'text-green-600' : raw === 1 ? 'text-red-600' : 'text-yellow-600';
   const sentimentEmoji = (score: number) => score > 0.2 ? '😊' : score < -0.2 ? '😠' : '😐';
+  const sentimentEmojiRaw = (raw?: number) => raw === 3 ? '😊' : raw === 1 ? '😠' : '😐';
   const confidenceColor = (v: number) => v >= 0.85 ? 'text-green-600' : v <= 0.7 ? 'text-red-600' : 'text-yellow-600';
   const positivePctColor = (pct: number) => pct >= 66 ? 'text-green-600' : pct <= 44 ? 'text-red-600' : 'text-yellow-600';
 
@@ -390,9 +434,9 @@ export default function NoticiasPage() {
               </Select>
             </div>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <small className="text-muted-foreground">Mostrando {filteredNews.length} de {allNews.length} notícias</small>
-            <Button variant="outline" size="sm" onClick={()=> setFilters({ query:'', category:'all', sentiment:'all', politician:'all', hours:24 })}>Limpar filtros</Button>
+            <Button variant="outline" size="sm" onClick={()=> setFilters({ query:'', category:'all', sentiment:'all', politician:'all', hours:168 })}>Limpar filtros</Button>
           </div>
         </CardContent>
       </Card>
@@ -410,7 +454,7 @@ export default function NoticiasPage() {
             <div className="py-8 text-center text-muted-foreground">Nenhuma notícia encontrada</div>
           ) : (
             <div className="space-y-3">
-              {filteredNews.map((n, idx) => (
+              {filteredNews.slice((feedPage-1)*feedPageSize, (feedPage-1)*feedPageSize + feedPageSize).map((n, idx) => (
                 <div key={n.id || idx} className="rounded border p-3 transition hover:-translate-y-0.5 hover:shadow-sm">
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -421,28 +465,39 @@ export default function NoticiasPage() {
                       </a>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Badge variant="secondary">{n.source}</Badge>
-                        <Badge variant="outline">{n.category}</Badge>
-                        {n.politicians_mentioned?.map(p => (
+                        {n.category && <Badge variant="outline">{n.category}</Badge>}
+                        {(n.politicians_mentioned || []).map(p => (
                           <Badge key={p}>{p}</Badge>
                         ))}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`mb-1 text-sm font-medium ${sentimentColor(n.sentiment_score)}`}>
-                        {sentimentEmoji(n.sentiment_score)} {n.sentiment_score.toFixed(2)}
+                      <div className={`mb-1 text-sm font-medium ${sentimentColorRaw(n.sentimentRaw)}`}>
+                        {sentimentEmojiRaw(n.sentimentRaw)} {n.sentimentRaw ?? 0}
                       </div>
                       <div className="text-xs text-muted-foreground">{n.publishedAtLabel}</div>
                     </div>
                   </div>
                   <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">{n.content ?? n.summary}</p>
-                  <div className="flex items-center justify-between gap-3">
-
-                    <div className="w-40">
-                      <Progress value={Math.round(n.confidence_score * 100)} className="h-1.5" indicatorClassName={sentimentBar(n.sentiment_score)} />
-                    </div>
-                  </div>
+                  <div className="flex items-center justify-between gap-3"></div>
                 </div>
               ))}
+              {/* Feed pagination controls */}
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <span className="text-xs text-muted-foreground">Itens por página</span>
+                <Select value={String(feedPageSize)} onValueChange={(v)=>{ setFeedPageSize(Number(v) as any); setFeedPage(1); }}>
+                  <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={()=> setFeedPage(p=> Math.max(1, p-1))} disabled={feedPage<=1}>Anterior</Button>
+                <div className="text-xs text-muted-foreground">Pág. {feedPage}</div>
+                <Button variant="outline" size="sm" onClick={()=> setFeedPage(p=> (p*feedPageSize<filteredNews.length)? p+1 : p)} disabled={feedPage*feedPageSize>=filteredNews.length}>Próxima</Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -452,7 +507,7 @@ export default function NoticiasPage() {
       <Card>
         <CardHeader>
           <CardTitle>Monitor de Notícias</CardTitle>
-          <CardDescription>Análise e monitoramento avançado (mock)</CardDescription>
+          <CardDescription>Análise e monitoramento com dados reais</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={(v)=> setActiveTab(v as any)}>
@@ -558,10 +613,37 @@ export default function NoticiasPage() {
                     const cutoff = Date.now() - searchForm.days*24*3600*1000;
                     items = items.filter(n=> new Date(n.publishedAt).getTime()>=cutoff);
                     setSearchResults(items);
+                    setSearchPage(1);
                   }}>Buscar</Button>
                 </div>
                 <div className="md:col-span-2">
                   {searchResults.length? (
+                    <>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <small className="text-muted-foreground">
+                        {(() => {
+                          const total = searchResults.length;
+                          const start = total ? (searchPage - 1) * searchPageSize + 1 : 0;
+                          const end = Math.min(total, searchPage * searchPageSize);
+                          return `Mostrando ${start ? `${start}-${end}` : 0} de ${total} resultados`;
+                        })()}
+                      </small>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Itens por página</span>
+                        <Select value={String(searchPageSize)} onValueChange={(v)=>{ setSearchPageSize(Number(v) as any); setSearchPage(1); }}>
+                          <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="sm" onClick={()=> setSearchPage(p=> Math.max(1, p-1))} disabled={searchPage<=1}>Anterior</Button>
+                        <div className="text-xs text-muted-foreground">Pág. {searchPage}</div>
+                        <Button variant="outline" size="sm" onClick={()=> setSearchPage(p=> (p*searchPageSize<searchResults.length)? p+1 : p)} disabled={searchPage*searchPageSize>=searchResults.length}>Próxima</Button>
+                      </div>
+                    </div>
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -572,7 +654,7 @@ export default function NoticiasPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {searchResults.map((n,i)=> (
+                        {searchResults.slice((searchPage-1)*searchPageSize, (searchPage-1)*searchPageSize + searchPageSize).map((n,i)=> (
                           <TableRow key={n.id||i}>
                             <TableCell className="font-medium">{n.title}<div className="text-xs text-muted-foreground">{n.politicians_mentioned?.[0] ? `👤 ${n.politicians_mentioned[0]}`:''}</div></TableCell>
                             <TableCell>{n.source}</TableCell>
@@ -584,6 +666,7 @@ export default function NoticiasPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    </>
                   ) : (
                     <div className="text-sm text-muted-foreground">Use os filtros à esquerda para buscar notícias.</div>
                   )}
