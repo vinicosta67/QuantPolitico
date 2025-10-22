@@ -1,11 +1,16 @@
 ﻿"use client";
-
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { NewsArticle } from "@/lib/types";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import { LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, ComposedChart } from "recharts";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { generateNewsReportAction, searchNews } from "../noticias/actions";
 import type { DashboardData } from "./actions";
 import { fetchDashboardData } from "./actions";
 
@@ -23,6 +28,11 @@ export default function DashboardPage() {
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [allNews, setAllNews] = React.useState<ExtendedNews[]>([]);
+  // Reports state (reuse from Notícias)
+  const [reportOpen, setReportOpen] = React.useState(false);
+  const [reportType, setReportType] = React.useState<'daily'|'weekly'|'custom'|null>(null);
+  const [reportLoading, setReportLoading] = React.useState(false);
+  const [reportData, setReportData] = React.useState<any>(null);
   
 
   React.useEffect(() => {
@@ -58,6 +68,77 @@ export default function DashboardPage() {
   //   return { total: allNews.length, sentimentAvg: avg, positivePercentage: positive, confidenceAvg: conf };
   // }, [allNews]);
 
+  // Carrega notícias reais (reuso da aba Notícias)
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const items = await searchNews("");
+        const mapRaw = (raw?: number) => (raw === 1 ? -1 : raw === 3 ? 1 : 0);
+        const enriched = items.map((n: any) => ({ ...n, sentiment_score: mapRaw((n as any)?.sentimentValue) }));
+        setAllNews(enriched as any);
+      } catch {
+        setAllNews([]);
+      }
+    })();
+  }, []);
+  const newsKpis = React.useMemo(() => {
+    const total = allNews.length;
+    const sentimentAvg = total ? allNews.reduce((s: number, n: any) => s + (n.sentiment_score || 0), 0) / total : 0;
+    const positivePct = total ? (allNews.filter((n: any) => (n.sentiment_score || 0) > 0).length / total) * 100 : 0;
+    return { total, sentimentAvg, positivePct };
+  }, [allNews]);
+  // Temas e fontes (mock - pronto para API)
+  const availableThemes = React.useMemo(() => (
+    ['economia','saude','educacao','seguranca','meio_ambiente','corrupcao']
+  ), []);
+  const sources = React.useMemo(() => (['broadcast','newsdata','redes'] as const), []);
+  const [selectedThemes, setSelectedThemes] = React.useState<string[]>(['economia','saude','educacao']);
+  const [periodDays, setPeriodDays] = React.useState<7|30|90>(30);
+  const seeded = React.useCallback((s: string) => {
+    let h = 1779033703 ^ s.length;
+    for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+    return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+  }, []);
+  const lastNDays = React.useCallback((n: number) => {
+    const arr: { label: string; date: Date }[] = []; const d = new Date();
+    for (let i = n - 1; i >= 0; i--) { const di = new Date(d); di.setDate(d.getDate() - i); arr.push({ label: di.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), date: di }); }
+    return arr;
+  }, []);
+
+  const { chartData, configKeys } = React.useMemo(() => {
+    const rnd = seeded(`${selectedThemes.join(',')}|${periodDays}`);
+    const days = lastNDays(periodDays);
+    const cfg: Record<string, { label: string; color: string }> = {};
+    const sourceColors: Record<string,string> = { broadcast: 'hsl(var(--chart-1))', newsdata: 'hsl(var(--chart-3))', redes: 'hsl(var(--chart-5))' };
+    const rows = days.map((d, idx) => {
+      const row: any = { date: d.label };
+      selectedThemes.forEach((t, ti) => {
+        const base = 20 + rnd()*80 + ti*5;
+        const wave = Math.sin((idx/(days.length-1))*Math.PI*2*(1+ti*0.2))*15;
+        const vol = Math.max(2, Math.round(base + wave + (rnd()-0.5)*10));
+        row[`vol_${t}`] = vol;
+        sources.forEach((src, si) => {
+          const w = Math.sin((idx/(days.length-1))*Math.PI*(1+si*0.25+ti*0.15));
+          const noise = (rnd()-0.5)*0.2; const sent = Math.max(-1, Math.min(1, 0.1 + 0.4*w + noise));
+          const key = `${t}_${src}`; row[key] = parseFloat(sent.toFixed(2));
+          if (!cfg[key]) { const c = sourceColors[src] || 'hsl(var(--chart-2))'; cfg[key] = { label: `${t}/${src}`, color: c }; }
+        });
+      });
+      return row;
+    });
+    cfg.volume = { label: 'Volume', color: 'hsl(var(--muted-foreground))' } as any;
+    return { chartData: rows, configKeys: cfg };
+  }, [selectedThemes, periodDays, sources, lastNDays, seeded]);
+
+  const toggleTheme = (t: string) => setSelectedThemes((prev)=> prev.includes(t) ? prev.filter(x=>x!==t) : [...prev, t]);
+
+  const openReport = React.useCallback(async (type: 'daily'|'weekly'|'custom', custom?: {query?: string; days?: number}) => {
+    try { setReportType(type); setReportOpen(true); setReportLoading(true);
+      const input = { type, query: custom?.query ?? '', days: custom?.days ?? (type==='daily'?1:type==='weekly'?7:7) } as any;
+      const d = await generateNewsReportAction(input); setReportData(d as any);
+    } finally { setReportLoading(false); }
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -65,13 +146,67 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Visão geral do sistema de inteligência política</p>
       </div>
 
-      {/* Métricas */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total de Notícias</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{data?.overview.totalNews ?? '-'}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Sentimento Médio</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${data ? sentimentColor(data.overview.sentimentAvg) : ''}`}>{data ? data.overview.sentimentAvg.toFixed(2) : '-'}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">% Positivas</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${data ? positivePctColor(data.overview.positivePct) : ''}`}>{data ? data.overview.positivePct.toFixed(1) + '%' : '-'}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Confiança Média</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${data ? confidenceColor(data.overview.confidenceAvg) : ''}`}>{data ? data.overview.confidenceAvg.toFixed(2) : '-'}</CardContent></Card>
+      {/* KPIs de Notícias (reutilizados da aba Notícias) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total de Notícias</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{newsKpis.total}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Sentimento Médio</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${sentimentColor(newsKpis.sentimentAvg)}`}>{newsKpis.sentimentAvg.toFixed(2)}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Notícias Positivas</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${positivePctColor(newsKpis.positivePct)}`}>{newsKpis.positivePct.toFixed(1)}%</CardContent></Card>
       </div>
+
+      {/* Temas por Fonte (mock pronto p/ API) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Temas por Fonte</CardTitle>
+          <CardDescription>Selecione temas. Barras mostram volume; linhas mostram sentimento por fonte.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-3">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">Selecionar temas <span className="ml-2 text-xs text-muted-foreground">({selectedThemes.length})</span></Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-64">
+                <div className="space-y-2">
+                  {availableThemes.map((t) => (
+                    <label key={t} className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={selectedThemes.includes(t)} onCheckedChange={()=> toggleTheme(t)} />
+                      <span className="capitalize">{t.replace('_',' ')}</span>
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <ChartContainer config={configKeys as any} className="h-[320px] w-full">
+            <ComposedChart data={chartData} margin={{ left: 8, right: 12, top: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" tickLine={false} axisLine={false} />
+              <YAxis yAxisId="left" tickLine={false} axisLine={false} width={28} />
+              <YAxis yAxisId="right" orientation="right" domain={[-1,1]} tickLine={false} axisLine={false} width={32} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              {selectedThemes.map((t) => (
+                <Bar key={`vol_${t}`} yAxisId="left" dataKey={`vol_${t}`} stackId="vol" fill={`var(--color-volume)`} opacity={0.35} radius={3} />
+              ))}
+              {selectedThemes.flatMap((t) => sources.map((s) => ({ key: `${t}_${s}`, theme: t, src: s })) ).map(({key}) => (
+                <Line key={key} yAxisId="right" type="monotone" dataKey={key} stroke={`var(--color-${key})`} dot={false} strokeWidth={2} />
+              ))}
+              <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+            </ComposedChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
+      {/* Relatórios (reuso Notícias) */}
+      <Card>
+        <CardHeader><CardTitle>Relatórios de Notícias</CardTitle><CardDescription>Gere PDF com análises. Reutiliza lógica da aba Notícias.</CardDescription></CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            <Button size="sm" onClick={()=> openReport('daily')}>Relatório Diário</Button>
+            <Button size="sm" variant="outline" onClick={()=> openReport('weekly')}>Relatório Semanal</Button>
+            <Button size="sm" variant="secondary" onClick={()=> { setReportType('custom'); setReportOpen(true); setReportData(null); }}>Personalizado…</Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tags */}
       <Card>
@@ -88,6 +223,40 @@ export default function DashboardPage() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Pico Estimado</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">20h</div><div className="text-xs text-muted-foreground">Tempo para pico</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Decaimento</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">42h</div><div className="text-xs text-muted-foreground">Tempo de declínio</div></CardContent></Card>
       </div>
+
+      {/* Report Dialog */}
+      <Dialog open={reportOpen} onOpenChange={(o)=>{ setReportOpen(o); if(!o){ setReportData(null); setReportLoading(false);} }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {reportType==='custom' ? 'Relatorio Personalizado' : reportType==='daily' ? 'Relatorio Diario' : 'Relatorio Semanal'}
+            </DialogTitle>
+          </DialogHeader>
+          {reportLoading && (
+            <div className="py-6 text-center text-muted-foreground">Gerando relatorio…</div>
+          )}
+          {reportData && !reportLoading && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm text-muted-foreground">{reportData.timeframeLabel}</div>
+                <div className="text-base font-semibold">{reportData.title}</div>
+                <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{reportData.summary}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Metricas</CardTitle></CardHeader><CardContent className="text-sm space-y-1">
+                  <div>Total: <strong>{reportData.keyMetrics.total}</strong></div>
+                  <div>Polaridade media: <strong>{reportData.keyMetrics.avgSentiment.toFixed(2)}</strong></div>
+                  <div>% positivas: <strong>{reportData.keyMetrics.positivePct.toFixed(1)}%</strong></div>
+                  <div>Top temas: {reportData.keyMetrics.topThemes.join(', ') || '-'}</div>
+                </CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Riscos</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{reportData.risks.map((r: string,i: number)=>(<li key={i}>{r}</li>))}</ul></CardContent></Card>
+              </div>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Destaques</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{reportData.highlights.map((h: string,i: number)=>(<li key={i}>{h}</li>))}</ul></CardContent></Card>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Acoes Recomendadas</CardTitle></CardHeader><CardContent className="text-sm"><ul className="list-disc pl-5 space-y-1">{reportData.recommendations.map((h: string,i: number)=>(<li key={i}>{h}</li>))}</ul></CardContent></Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -139,3 +308,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
+
+
