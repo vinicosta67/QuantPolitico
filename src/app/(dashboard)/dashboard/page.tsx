@@ -14,6 +14,9 @@ import { generateNewsReportAction, searchNews } from "../noticias/actions";
 import type { DashboardData } from "./actions";
 import { fetchDashboardData } from "./actions";
 import { newsReportToPdfBytes } from "@/lib/news-report-pdf";
+import { useToast } from "@/hooks/use-toast";
+import { Send, Loader2 } from "lucide-react";
+import { sendTextToWhatsApp } from "@/app/(dashboard)/noticias/whatsapp";
 
 type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
   sentiment_score: number;
@@ -26,6 +29,7 @@ type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: 
 };
 
 export default function DashboardPage() {
+  const { toast } = useToast();
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [allNews, setAllNews] = React.useState<ExtendedNews[]>([]);
@@ -34,6 +38,7 @@ export default function DashboardPage() {
   const [reportType, setReportType] = React.useState<'daily'|'weekly'|'custom'|null>(null);
   const [reportLoading, setReportLoading] = React.useState(false);
   const [reportData, setReportData] = React.useState<any>(null);
+  const [sendingReport, setSendingReport] = React.useState(false);
   
 
   React.useEffect(() => {
@@ -88,6 +93,56 @@ export default function DashboardPage() {
     const positivePct = total ? (allNews.filter((n: any) => (n.sentiment_score || 0) > 0).length / total) * 100 : 0;
     return { total, sentimentAvg, positivePct };
   }, [allNews]);
+
+  // Build concise WhatsApp text from a generated report
+  const buildWhatsAppReportMessage = React.useCallback((r: any) => {
+    if (!r) return "";
+    const topThemes = Array.isArray(r.keyMetrics?.topThemes) ? r.keyMetrics.topThemes.slice(0, 5) : [];
+    const highlights = Array.isArray(r.highlights) ? r.highlights.slice(0, 5) : [];
+    const risks = Array.isArray(r.risks) ? r.risks.slice(0, 3) : [];
+    const recs = Array.isArray(r.recommendations) ? r.recommendations.slice(0, 3) : [];
+    const lines: string[] = [];
+    lines.push(`Relatório: ${r.title}`);
+    if (r.timeframeLabel) lines.push(r.timeframeLabel);
+    if (r.summary) lines.push("", r.summary);
+    lines.push(
+      "",
+      `Métricas: total ${r.keyMetrics?.total ?? "-"}, polaridade média ${Number(r.keyMetrics?.avgSentiment ?? 0).toFixed(2)}, % positivas ${Number(r.keyMetrics?.positivePct ?? 0).toFixed(1)}%`
+    );
+    if (topThemes.length) lines.push(`Top temas: ${topThemes.map((t: string) => `#${t}`).join(' ')}`);
+    if (highlights.length) {
+      lines.push("", "Destaques:");
+      highlights.forEach((h: string, i: number) => lines.push(`${i + 1}) ${h}`));
+    }
+    if (risks.length) {
+      lines.push("", "Riscos:");
+      risks.forEach((h: string, i: number) => lines.push(`${i + 1}) ${h}`));
+    }
+    if (recs.length) {
+      lines.push("", "Ações:");
+      recs.forEach((h: string, i: number) => lines.push(`${i + 1}) ${h}`));
+    }
+    const msg = lines.join("\n");
+    return msg.length > 1500 ? msg.slice(0, 1495).trimEnd() + "…" : msg;
+  }, []);
+
+  const handleSendReportWhatsApp = React.useCallback(async () => {
+    try {
+      setSendingReport(true);
+      const type = (reportType ?? 'weekly');
+      const days = type === 'daily' ? 1 : type === 'weekly' ? 7 : 7;
+      const data = await generateNewsReportAction({ type, query: '', days } as any);
+      const text = buildWhatsAppReportMessage(data);
+      if (!text) throw new Error('Não foi possível montar o relatório.');
+      await sendTextToWhatsApp(text);
+      toast({ title: 'Enviado', description: 'Relatório enviado para o WhatsApp configurado.' });
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: 'Falha no envio', description: e?.message || 'Verifique as credenciais e tente novamente.', variant: 'destructive' });
+    } finally {
+      setSendingReport(false);
+    }
+  }, [reportType, buildWhatsAppReportMessage, toast]);
   // Temas e fontes (mock - pronto para API)
   const availableThemes = React.useMemo(() => (
     ['economia','saude','educacao','seguranca','meio_ambiente','corrupcao']
@@ -284,6 +339,9 @@ export default function DashboardPage() {
             <Button size="sm" onClick={()=> openReport('daily')}>Relatório Diário</Button>
             <Button size="sm" variant="outline" onClick={()=> openReport('weekly')}>Relatório Semanal</Button>
             <Button size="sm" variant="secondary" onClick={()=> openReport('custom')}>Personalizado…</Button>
+            <Button size="sm" variant="outline" onClick={handleSendReportWhatsApp} disabled={sendingReport}>
+              {sendingReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar relatório via WhatsApp
+            </Button>
           </div>
         </CardContent>
       </Card>

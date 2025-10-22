@@ -1,0 +1,23 @@
+    try {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`GDELT status ${res.status}`);
+      const data = await res.json();
+      const articles: any[] = data?.articles ?? data?.docs ?? [];
+      const items = articles
+        .map((a) => ({
+          title: a.title || a.source || 'Sem título',
+          source: a.sourceCommonName || a.domain || a.source || 'GDELT',
+          url: a.url || '',
+          summary:
+            a.excerpt || a.translingual || a.kw || a.title || 'Sem resumo disponível.',
+          publishedAt: String(a.seendate || a.date || a.publishedAt || ''),
+        }))
+        .filter((x) => x.url);
+      return { ok: true, provider: 'gdelt', items } as const;
+    } catch (err) {
+      console.error('fetchOnlinePoliticalNewsStatus error', err);
+      return { ok: false, provider: 'gdelt', items: [], error: (err as Error)?.message || 'unknown_error' } as const;
+    }
+  }
+);
+

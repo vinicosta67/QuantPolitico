@@ -484,3 +484,8 @@ export async function getDemoNewsMessages() {
   const list = generateDemoNews();
   return list.map(buildWhatsAppSnippet);
 }
+
+// Send arbitrary text to the configured WhatsApp destination
+export async function sendTextToWhatsApp(text: string) {
+  return sendWhatsAppGeneric(text);
+}
