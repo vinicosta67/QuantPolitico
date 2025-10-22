@@ -138,7 +138,187 @@ export default function Eleicao2Page() {
 
   return (
     <div className="container mx-auto space-y-6 p-4 sm:p-6 lg:p-8">
+      {/* Nova seção: Temas - filtros e gráficos (mock) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Temas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Filtros (apenas Tema, Período, Fonte) */}
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="tema">Tema</Label>
+              <Select value={tema} onValueChange={(v) => setTema(v as any)}>
+                <SelectTrigger id="tema" className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="economia">Economia</SelectItem>
+                  <SelectItem value="saude">Saúde</SelectItem>
+                  <SelectItem value="educacao">Educação</SelectItem>
+                  <SelectItem value="seguranca">Segurança</SelectItem>
+                  <SelectItem value="meio_ambiente">Meio Ambiente</SelectItem>
+                  <SelectItem value="infraestrutura">Infraestrutura</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="periodo">Período</Label>
+              <Select value={String(periodo)} onValueChange={(v) => setPeriodo(parseInt(v, 10) as any)}>
+                <SelectTrigger id="periodo" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 dias</SelectItem>
+                  <SelectItem value="30">30 dias</SelectItem>
+                  <SelectItem value="90">90 dias</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fonte">Fonte</Label>
+              <Select value={fonte} onValueChange={(v) => setFonte(v as any)}>
+                <SelectTrigger id="fonte" className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="broadcast">Broadcast</SelectItem>
+                  <SelectItem value="newsdata">Newsdata</SelectItem>
+                  <SelectItem value="jornais">Jornais</SelectItem>
+                  <SelectItem value="redes">Redes Sociais</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Gráfico 1: Polaridade x Volume (30 dias default) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Polaridade × Volume (últimos {periodo} dias)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={{ volume: { label: 'Volume', color: 'hsl(var(--primary))' }, polarity: { label: 'Polaridade média', color: '#f59e0b' } }} className="h-[300px] w-full">
+                <ComposedChart data={polVolData} margin={{ left: 8, right: 12, top: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="left" tickLine={false} axisLine={false} width={32} />
+                  <YAxis yAxisId="right" orientation="right" domain={[-1, 1]} tickLine={false} axisLine={false} width={32} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar yAxisId="left" dataKey="volume" fill={`var(--color-volume)`} radius={4} />
+                  <Line yAxisId="right" type="monotone" dataKey="polarity" stroke={`var(--color-polarity)`} dot={false} strokeWidth={2.25} />
+                  <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                </ComposedChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico 2: Emoções × Tempo + Polaridade */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Polaridade × Emoções (últimos {periodo} dias)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={{
+                  alegria: { label: 'Alegria', color: 'hsl(var(--chart-2))' },
+                  tristeza: { label: 'Tristeza', color: '#6b7280' },
+                  raiva: { label: 'Raiva', color: 'hsl(var(--destructive))' },
+                  medo: { label: 'Medo', color: '#6366f1' },
+                  surpresa: { label: 'Surpresa', color: 'hsl(var(--chart-4))' },
+                  nojo: { label: 'Nojo', color: '#84cc16' },
+                  polarity: { label: 'Polaridade', color: '#f59e0b' },
+                }}
+                className="h-[320px] w-full"
+              >
+                <ComposedChart data={emotionData} margin={{ left: 8, right: 12, top: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="left" domain={[0, 1]} tickLine={false} axisLine={false} width={28} />
+                  <YAxis yAxisId="right" orientation="right" domain={[-1, 1]} tickLine={false} axisLine={false} width={32} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line yAxisId="left" type="monotone" dataKey="alegria" stroke={`var(--color-alegria)`} dot={false} strokeWidth={2} />
+                  <Line yAxisId="left" type="monotone" dataKey="tristeza" stroke={`var(--color-tristeza)`} dot={false} strokeWidth={2} />
+                  <Line yAxisId="left" type="monotone" dataKey="raiva" stroke={`var(--color-raiva)`} dot={false} strokeWidth={2} />
+                  <Line yAxisId="left" type="monotone" dataKey="medo" stroke={`var(--color-medo)`} dot={false} strokeWidth={2} />
+                  <Line yAxisId="left" type="monotone" dataKey="surpresa" stroke={`var(--color-surpresa)`} dot={false} strokeWidth={2} />
+                  <Line yAxisId="left" type="monotone" dataKey="nojo" stroke={`var(--color-nojo)`} dot={false} strokeWidth={2} />
+                  <Line yAxisId="right" type="monotone" dataKey="polarity" stroke={`var(--color-polarity)`} dot={false} strokeWidth={2.25} strokeDasharray="5 4" />
+                  <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                </ComposedChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </CardContent>
+      </Card>
       <h1 className="text-4xl font-bold tracking-tighter">ELEIÇÃO</h1>
+
+      {/* Filtros */}
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-x-6 gap-y-4 p-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="cargo">Cargo</Label>
+            <Select value={cargo} onValueChange={(v) => setCargo(v as any)}>
+              <SelectTrigger id="cargo" className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="governador">Governador</SelectItem>
+                <SelectItem value="senador">Senador</SelectItem>
+                <SelectItem value="presidente">Presidente</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="estado">Estado</Label>
+            <Select value={estado} onValueChange={(v) => setEstado(v as any)}>
+              <SelectTrigger id="estado" className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sp">São Paulo</SelectItem>
+                <SelectItem value="rj">Rio de Janeiro</SelectItem>
+                <SelectItem value="mg">Minas Gerais</SelectItem>
+                <SelectItem value="ba">Bahia</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="partido">Partido</Label>
+            <Select value={partido} onValueChange={(v) => setPartido(v as any)}>
+              <SelectTrigger id="partido" className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="partido_a">Partido A</SelectItem>
+                <SelectItem value="partido_b">Partido B</SelectItem>
+                <SelectItem value="partido_c">Partido C</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-grow" />
+          <div className="flex items-center gap-4 pb-1">
+            <span className="text-sm font-medium">Fontes:</span>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="midia" checked={fontes.midia} onCheckedChange={(v)=> setFontes((f)=>({ ...f, midia: Boolean(v) }))} />
+              <Label htmlFor="midia" className="font-normal">
+                Mídia
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="redes" checked={fontes.redes} onCheckedChange={(v)=> setFontes((f)=>({ ...f, redes: Boolean(v) }))} />
+              <Label htmlFor="redes" className="font-normal">
+                Redes
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="legislativo" checked={fontes.legislativo} onCheckedChange={(v)=> setFontes((f)=>({ ...f, legislativo: Boolean(v) }))} />
+              <Label htmlFor="legislativo" className="font-normal">
+                Legislativo
+              </Label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <div className="flex h-96 items-center justify-center">

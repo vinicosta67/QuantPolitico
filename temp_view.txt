@@ -1,0 +1,2 @@
+            <CardHeader><CardTitle>Polaridade × Volume (últimos {filters.periodo} dias)</CardHeader></CardHeader>
+            <CardHeader><CardTitle>Polaridade × Emoções (últimos {filters.periodo} dias)</CardTitle></CardHeader>

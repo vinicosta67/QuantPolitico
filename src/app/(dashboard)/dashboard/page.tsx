@@ -1,16 +1,29 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { NewsArticle } from "@/lib/types";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { DashboardData } from "./actions";
 import { fetchDashboardData } from "./actions";
 
+type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
+  sentiment_score: number;
+  sentimentRaw?: number;
+  confidence_score?: number;
+  category?: "economia" | "saude" | "educacao" | "seguranca";
+  politicians_mentioned?: string[];
+  emotion_primary?: "alegria" | "raiva" | "tristeza" | "neutro";
+  content?: string;
+};
+
 export default function DashboardPage() {
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [allNews, setAllNews] = React.useState<ExtendedNews[]>([]);
+  
 
   React.useEffect(() => {
     (async () => {
@@ -35,6 +48,15 @@ export default function DashboardPage() {
   const ibsAvgVal = data ? avg(data.indicators.map((i) => i.ibs)) : 0;
   const iapAvg = iapAvgVal.toFixed(3);
   const ibsAvg = ibsAvgVal.toFixed(3);
+
+  // Metrics (derivados)
+  // const metrics = React.useMemo(() => {
+  //   const total = allNews.length || 1;
+  //   const avg = allNews.reduce((s, n) => s + (n.sentiment_score || 0), 0) / total;
+  //   const positive = allNews.filter(n => n.sentiment_score > 0.1).length / (allNews.length || 1) * 100;
+  //   const conf = allNews.reduce((s, n) => s + (n.confidence_score || 0.8), 0) / total;
+  //   return { total: allNews.length, sentimentAvg: avg, positivePercentage: positive, confidenceAvg: conf };
+  // }, [allNews]);
 
   return (
     <div className="space-y-6">
