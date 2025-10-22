@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { generateNewsReportAction, searchNews } from "../noticias/actions";
 import type { DashboardData } from "./actions";
 import { fetchDashboardData } from "./actions";
+import { newsReportToPdfBytes } from "@/lib/news-report-pdf";
 
 type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
   sentiment_score: number;
@@ -92,7 +93,7 @@ export default function DashboardPage() {
     ['economia','saude','educacao','seguranca','meio_ambiente','corrupcao']
   ), []);
   const sources = React.useMemo(() => (['broadcast','newsdata','redes'] as const), []);
-  const [selectedThemes, setSelectedThemes] = React.useState<string[]>(['economia','saude','educacao']);
+  const [selectedThemes, setSelectedThemes] = React.useState<string[]>(['economia']);
   const [periodDays, setPeriodDays] = React.useState<7|30|90>(30);
   const seeded = React.useCallback((s: string) => {
     let h = 1779033703 ^ s.length;
@@ -133,11 +134,90 @@ export default function DashboardPage() {
   const toggleTheme = (t: string) => setSelectedThemes((prev)=> prev.includes(t) ? prev.filter(x=>x!==t) : [...prev, t]);
 
   const openReport = React.useCallback(async (type: 'daily'|'weekly'|'custom', custom?: {query?: string; days?: number}) => {
-    try { setReportType(type); setReportOpen(true); setReportLoading(true);
-      const input = { type, query: custom?.query ?? '', days: custom?.days ?? (type==='daily'?1:type==='weekly'?7:7) } as any;
-      const d = await generateNewsReportAction(input); setReportData(d as any);
-    } finally { setReportLoading(false); }
-  }, []);
+    try {
+      setReportLoading(true)
+      const days = custom?.days ?? (type==='daily'?1:type==='weekly'?7:7)
+
+      if (allNews && allNews.length) {
+        const total = allNews.length
+        const avgSent = total ? allNews.reduce((s, n: any) => s + (n.sentiment_score || 0), 0) / total : 0
+        const posPct = total ? (allNews.filter((n: any) => (n.sentiment_score || 0) > 0).length / total) * 100 : 0
+
+        const now = new Date()
+        const start = new Date(now.getTime() - days*24*3600*1000)
+        const fmt = (d: Date) => d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })
+        const timeframeLabel = `${fmt(start)} – ${fmt(now)}`
+
+        const themeCount: Record<string, number> = {}
+        allNews.forEach((n:any)=>{ const c = (n.category||'').toString(); if(c){ themeCount[c] = (themeCount[c]||0)+1 } })
+        let topThemes = Object.entries(themeCount).sort((a,b)=> b[1]-a[1]).slice(0,5).map(([k])=>k)
+        if (!topThemes.length) {
+          const stop = new Set(['de','da','do','das','dos','a','o','e','é','em','para','com','no','na','os','as','uma','por','sobre','ao','à','que'])
+          const bag: Record<string, number> = {}
+          allNews.forEach((n:any)=>{
+            const text = (n.title||'').toLowerCase()
+            text.split(/[^a-zà-úÀ-Ú0-9_]+/i).forEach(w=>{ if(w && w.length>3 && !stop.has(w)) bag[w]=(bag[w]||0)+1 })
+          })
+          topThemes = Object.entries(bag).sort((a,b)=> b[1]-a[1]).slice(0,5).map(([k])=>k)
+        }
+
+        const highlights = [...allNews]
+          .sort((a:any,b:any)=> new Date(b.publishedAt||b.publishedAtLabel||0).getTime() - new Date(a.publishedAt||a.publishedAtLabel||0).getTime())
+          .slice(0,6)
+          .map((n:any)=> `${n.title}`)
+
+        const negatives = allNews.filter((n:any)=> (n.sentiment_score||0) < -0.05).length
+        const positives = allNews.filter((n:any)=> (n.sentiment_score||0) > 0.05).length
+        const risks: string[] = []
+        if (negatives > positives) risks.push('Polaridade negativa predominante no período, atenção à resposta rápida.')
+        if (posPct < 40) risks.push('Baixa proporção de notícias positivas.')
+        risks.push('Monitorar picos temáticos e possíveis narrativas adversas.')
+
+        const recommendations: string[] = []
+        recommendations.push('Publicar síntese propositiva destacando dados verificáveis.')
+        recommendations.push('Ativar rede aliada nas redes sociais para pautar mensagens‑chave.')
+        recommendations.push('Preparar Q&A para imprensa com três mensagens centrais.')
+
+        const report = {
+          title: type==='daily' ? 'Relatório Diário de Notícias e Narrativas' : type==='weekly' ? 'Relatório Semanal de Notícias e Narrativas' : 'Relatório Personalizado de Notícias',
+          timeframeLabel,
+          summary: `Período de ${days} dia(s). Total: ${total}. Polaridade média: ${avgSent.toFixed(2)}. Positivas: ${posPct.toFixed(1)}%.`,
+          keyMetrics: { total, avgSentiment: avgSent, positivePct: posPct, topThemes },
+          highlights,
+          risks,
+          recommendations,
+        } as any
+
+        const pdfBytes = await newsReportToPdfBytes(report)
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        const stamp = new Date().toISOString().slice(0,10)
+        a.href = url
+        a.download = `Relatorio_noticias_${type}_${stamp}.pdf`
+        document.body.appendChild(a)
+        a.click(); a.remove(); URL.revokeObjectURL(url)
+        return
+      }
+
+      const input = { type, query: custom?.query ?? '', days } as any
+      const data = await generateNewsReportAction(input)
+      const pdfBytes = await newsReportToPdfBytes(data as any)
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const stamp = new Date().toISOString().slice(0,10)
+      a.href = url
+      a.download = `Relatorio_noticias_${type}_${stamp}.pdf`
+      document.body.appendChild(a)
+      a.click(); a.remove(); URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Falha ao gerar PDF do relatório', e)
+      alert('Não foi possível gerar o PDF agora.')
+    } finally {
+      setReportLoading(false)
+    }
+  }, [allNews])
 
   return (
     <div className="space-y-6">
@@ -203,7 +283,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-3">
             <Button size="sm" onClick={()=> openReport('daily')}>Relatório Diário</Button>
             <Button size="sm" variant="outline" onClick={()=> openReport('weekly')}>Relatório Semanal</Button>
-            <Button size="sm" variant="secondary" onClick={()=> { setReportType('custom'); setReportOpen(true); setReportData(null); }}>Personalizado…</Button>
+            <Button size="sm" variant="secondary" onClick={()=> openReport('custom')}>Personalizado…</Button>
           </div>
         </CardContent>
       </Card>
@@ -308,6 +388,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
 
 
 

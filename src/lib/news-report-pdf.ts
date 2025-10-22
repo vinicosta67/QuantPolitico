@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+﻿import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { GenerateNewsReportOutput } from '@/ai/flows/generate-news-report'
 
 const PAGE = { width: 595, height: 842, margin: 48 } as const
@@ -45,24 +45,25 @@ export async function newsReportToPdfBytes(report: GenerateNewsReportOutput): Pr
   // Header with brand bar (teal/gold)
   page.drawRectangle({ x: 0, y: height - 36, width, height: 36, color: rgb(0,0.5,0.5) })
   page.drawRectangle({ x: 0, y: height - 38, width, height: 2, color: rgb(0.96, 0.62, 0.04) })
-  page.drawText('Quant Politico', { x: margin, y: height - 26, size: 11, font: fontBold, color: rgb(1,1,1) })
-  page.drawText('Relatório de Notícias', { x: margin, y, size: 18, font: fontBold })
+  page.drawText('Quant Político', { x: margin, y: height - 26, size: 11, font: fontBold, color: rgb(1,1,1) })
+  page.drawText(' ')
+  page.drawText(sanitizeWinAnsi('Relatório de Notícias'), { x: margin, y, size: 18, font: fontBold })
   y -= GAP.line
   page.drawText(sanitizeWinAnsi(report.timeframeLabel || ''), { x: margin, y, size: 10, font: fontRegular, color: rgb(0.35,0.35,0.35) })
   y -= GAP.section
 
   // Title
   const titleLines = wrapByWidth(fontBold, report.title || 'Relatório', 16, maxW)
-  for (const l of titleLines) { page.drawText(l, { x: margin, y, size: 16, font: fontBold }); y -= GAP.line }
+  for (const l of titleLines) { page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 16, font: fontBold }); y -= GAP.line }
   y -= 6
 
   // Summary
   const sumLines = wrapByWidth(fontRegular, report.summary || '', 11, maxW)
-  for (const l of sumLines) { if (y < margin + 80) { y = addPage(doc, fontRegular, fontBold) } page.drawText(l, { x: margin, y, size: 11, font: fontRegular }); y -= 12 }
+  for (const l of sumLines) { if (y < margin + 80) { y = addPage(doc, fontRegular, fontBold) } page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 11, font: fontRegular }); y -= 12 }
   y -= GAP.block
 
   // Metrics
-  page.drawText('Métricas‑chave', { x: margin, y, size: 12, font: fontBold, color: rgb(0,0.5,0.5) }); y -= GAP.line
+  page.drawText(sanitizeWinAnsi('Métricas-chave'), { x: margin, y, size: 12, font: fontBold, color: rgb(0,0.5,0.5) }); y -= GAP.line
   const m = report.keyMetrics
   const metrics = [
     `Total de notícias: ${m.total}`,
@@ -93,7 +94,7 @@ function sectionList(doc: PDFDocument, page: any, title: string, items: string[]
   let y = yStart
   page.drawText(sanitizeWinAnsi(title), { x: margin, y, size: 12, font: fontBold, color: rgb(0,0.5,0.5) }); y -= GAP.line
   for (const it of items) {
-    const lines = wrapByWidth(fontRegular, `• ${it}`, 11, maxW)
+    const lines = wrapByWidth(fontRegular, `* ${it}`, 11, maxW)
     for (const l of lines) {
       if (y < margin + 40) { y = addPage(doc, fontRegular, fontBold) }
       page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 11, font: fontRegular }); y -= 12

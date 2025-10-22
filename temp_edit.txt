@@ -46,14 +46,14 @@ export async function newsReportToPdfBytes(report: GenerateNewsReportOutput): Pr
   page.drawRectangle({ x: 0, y: height - 36, width, height: 36, color: rgb(0,0.5,0.5) })
   page.drawRectangle({ x: 0, y: height - 38, width, height: 2, color: rgb(0.96, 0.62, 0.04) })
   page.drawText('Quant Politico', { x: margin, y: height - 26, size: 11, font: fontBold, color: rgb(1,1,1) })
-  page.drawText('Relatório de Notícias', { x: margin, y, size: 18, font: fontBold })
+  page.drawText(sanitizeWinAnsi('Relatorio de Noticias'), { x: margin, y, size: 18, font: fontBold })
   y -= GAP.line
   page.drawText(sanitizeWinAnsi(report.timeframeLabel || ''), { x: margin, y, size: 10, font: fontRegular, color: rgb(0.35,0.35,0.35) })
   y -= GAP.section
 
   // Title
-  const titleLines = wrapByWidth(fontBold, report.title || 'Relatório', 16, maxW)
-  for (const l of titleLines) { page.drawText(l, { x: margin, y, size: 16, font: fontBold }); y -= GAP.line }
+  const titleLines = wrapByWidth(fontBold, report.title || 'Relatorio', 16, maxW)
+  for (const l of titleLines) { page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 16, font: fontBold }); y -= GAP.line }
   y -= 6
 
   // Summary
@@ -62,7 +62,7 @@ export async function newsReportToPdfBytes(report: GenerateNewsReportOutput): Pr
   y -= GAP.block
 
   // Metrics
-  page.drawText('Métricas‑chave', { x: margin, y, size: 12, font: fontBold, color: rgb(0,0.5,0.5) }); y -= GAP.line
+  page.drawText(sanitizeWinAnsi('Metricas-chave'), { x: margin, y, size: 12, font: fontBold, color: rgb(0,0.5,0.5) }); y -= GAP.line
   const m = report.keyMetrics
   const metrics = [
     `Total de notícias: ${m.total}`,
