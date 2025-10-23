@@ -3,6 +3,8 @@
 import { fetchPoliticalNews } from '@/ai/tools/fetch-news';
 import { fetchOnlinePoliticalNews } from '@/ai/tools/fetch-online-news';
 import type { NewsArticle } from '@/lib/types';
+import { newsReportToPdfBytes } from '@/lib/news-report-pdf';
+import { generateNewsReport } from '@/ai/flows/generate-news-report';
 
 export type NewsFilters = {
   query?: string;
@@ -488,4 +490,244 @@ export async function getDemoNewsMessages() {
 // Send arbitrary text to the configured WhatsApp destination
 export async function sendTextToWhatsApp(text: string) {
   return sendWhatsAppGeneric(text);
+}
+
+// Utilities to send a document (PDF) by provider using a public link
+function getBaseUrl(): string {
+  const explicit = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+  if (explicit) {
+    if (/^https?:\/\//i.test(explicit)) return explicit.replace(/\/$/, '');
+    return `https://${explicit.replace(/\/$/, '')}`; // Vercel URL often comes without scheme
+  }
+  return 'http://localhost:3000';
+}
+
+async function sendDocumentViaTwilio(url: string, caption?: string): Promise<TwilioSendResult> {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
+  const to = process.env.WHATSAPP_TO || '';
+  if (!sid || !token) throw new Error('Twilio credentials missing (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN).');
+  if (!from || !to) throw new Error('Twilio WhatsApp endpoints missing (TWILIO_WHATSAPP_FROM/WHATSAPP_TO).');
+  const params = new URLSearchParams();
+  params.set('To', to);
+  params.set('From', from);
+  if (caption) params.set('Body', caption);
+  params.set('MediaUrl', url);
+  const basic = Buffer.from(`${sid}:${token}`).toString('base64');
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  } as any);
+  const txt = await res.text().catch(()=> '');
+  if (!res.ok) {
+    try { const j = JSON.parse(txt); throw new Error(j?.message || txt || res.statusText); } catch { throw new Error(txt || res.statusText); }
+  }
+  try { const j = JSON.parse(txt); return { sid: j?.sid || 'unknown', status: j?.status || 'accepted', to: j?.to, from: j?.from }; } catch { return { sid: 'unknown', status: 'accepted' }; }
+}
+
+async function sendDocumentViaMeta(url: string, caption?: string, filename?: string): Promise<TwilioSendResult> {
+  const token = process.env.META_WHATSAPP_TOKEN;
+  const phoneId = process.env.META_PHONE_NUMBER_ID;
+  const toEnv = process.env.WHATSAPP_TO || '';
+  if (!token || !phoneId) throw new Error('Meta WhatsApp credentials missing (META_WHATSAPP_TOKEN/META_PHONE_NUMBER_ID).');
+  const to = toEnv.replace(/^whatsapp:/i, '').replace(/\D/g, '');
+  const payload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'document',
+    document: { link: url, caption: caption || undefined, filename: filename || undefined },
+  } as any;
+  const res = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  } as any);
+  const txt = await res.text().catch(()=> '');
+  if (!res.ok) {
+    try { const j = JSON.parse(txt); throw new Error(j?.error?.message || txt || res.statusText); } catch { throw new Error(txt || res.statusText); }
+  }
+  try { const j = JSON.parse(txt); const id = j?.messages?.[0]?.id || 'unknown'; return { sid: id, status: 'accepted', to, from: String(phoneId) }; } catch { return { sid: 'unknown', status: 'accepted', to, from: String(phoneId) }; }
+}
+
+async function sendDocumentViaWhapi(url: string, caption?: string, filename?: string): Promise<TwilioSendResult> {
+  const apiBase = (process.env.WHAPI_API_URL || 'https://gate.whapi.cloud').replace(/\/$/, '');
+  const token = process.env.WHAPI_TOKEN;
+  const toEnv = process.env.WHATSAPP_TO || '';
+  if (!token) throw new Error('Whapi token missing (WHAPI_TOKEN).');
+  const to = toEnv.replace(/^whatsapp:/i, '').replace(/\D/g, '');
+  if (!to) throw new Error('Destination number invalid for Whapi (WHATSAPP_TO).');
+  // Whapi expects a 'media' object; when sending by link, use media.link
+  // Whapi Cloud expects 'media' as a string (link or media id)
+  const payload = { to, media: url, caption: caption || undefined, filename: filename || 'relatorio.pdf', file_name: filename || 'relatorio.pdf' } as any;
+  const res = await fetch(`${apiBase}/messages/document`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  } as any);
+  const txt = await res.text().catch(()=> '');
+  if (!res.ok) {
+    try { const j = JSON.parse(txt); const msg = j?.message || j?.error || txt || res.statusText; throw new Error(`Whapi document failed (${res.status}): ${msg}`); } catch { throw new Error(`Whapi document failed (${res.status}): ${txt || res.statusText}`); }
+  }
+  try { const j = JSON.parse(txt); const id = j?.message?.id || j?.id || 'unknown'; const status = j?.message?.status || j?.status || 'accepted'; return { sid: String(id), status, to }; } catch { return { sid: 'unknown', status: 'accepted', to }; }
+}
+
+async function sendDocumentLink(url: string, opts?: { caption?: string; filename?: string }): Promise<TwilioSendResult> {
+  const provider = (process.env.WHATSAPP_PROVIDER || 'twilio').toLowerCase();
+  if (provider === 'meta' || provider === 'cloud' || provider === 'facebook') {
+    return sendDocumentViaMeta(url, opts?.caption, opts?.filename);
+  }
+  if (provider === 'whapi' || provider === 'whapi.cloud' || provider === 'whapicloud') {
+    return sendDocumentViaWhapi(url, opts?.caption, opts?.filename);
+  }
+  return sendDocumentViaTwilio(url, opts?.caption);
+}
+
+export async function sendReportPdfToWhatsApp(input: { type: 'daily'|'weekly'|'custom'; query?: string; days?: number; caption?: string }) {
+  const type = input.type || 'weekly';
+  const days = typeof input.days === 'number' && input.days > 0 ? Math.min(30, Math.max(1, Math.floor(input.days))) : (type === 'daily' ? 1 : type === 'weekly' ? 7 : 7);
+  const query = input.query || '';
+  const base = getBaseUrl();
+  const url = `${base}/api/whatsapp/report.pdf?type=${encodeURIComponent(type)}&query=${encodeURIComponent(query)}&days=${encodeURIComponent(String(days))}`;
+  const stamp = new Date().toISOString().slice(0,10);
+  const filename = `Relatorio_noticias_${type}_${stamp}.pdf`;
+  const caption = input.caption || `Relatório ${type==='daily'?'diário':type==='weekly'?'semanal':'personalizado'} (${stamp})`;
+  return sendDocumentLink(url, { caption, filename });
+}
+
+// New: Direct Whapi upload flow (no public URL needed)
+export async function sendReportPdfToWhatsAppUpload(input: { type: 'daily'|'weekly'|'custom'; query?: string; days?: number; caption?: string }) {
+  const type = input.type || 'weekly';
+  const days = typeof input.days === 'number' && input.days > 0 ? Math.min(30, Math.max(1, Math.floor(input.days))) : (type === 'daily' ? 1 : type === 'weekly' ? 7 : 7);
+  const query = input.query || '';
+  const stamp = new Date().toISOString().slice(0,10);
+  const filename = `Relatorio_noticias_${type}_${stamp}.pdf`;
+  const caption = input.caption || `RelatÃ³rio ${type==='daily'?'diÃ¡rio':type==='weekly'?'semanal':'personalizado'} (${stamp})`;
+
+  const provider = (process.env.WHATSAPP_PROVIDER || 'twilio').toLowerCase();
+  if (provider === 'whapi' || provider === 'whapi.cloud' || provider === 'whapicloud') {
+    const report = await generateNewsReport({ type, query, days } as any);
+    const pdfBytes = await newsReportToPdfBytes(report as any);
+    // Try direct base64 to /messages/document (no prior upload)
+    try {
+      return await sendDocumentViaWhapiBase64FromBytes(pdfBytes, caption, filename);
+    } catch (e) {
+      // Fallback: upload then send by mediaId
+      const mediaId = await uploadPdfToWhapi(pdfBytes, filename);
+      return sendDocumentViaWhapiMediaId(mediaId, caption, filename);
+    }
+  }
+  // Non-Whapi providers fall back to link
+  return sendReportPdfToWhatsApp(input);
+}
+
+// Send PDF directly as base64 on /messages/document (Whapi)
+async function sendDocumentViaWhapiBase64FromBytes(pdfBytes: Uint8Array, caption?: string, filename?: string): Promise<TwilioSendResult> {
+  const apiBase = (process.env.WHAPI_API_URL || 'https://gate.whapi.cloud').replace(/\/$/, '');
+  const token = process.env.WHAPI_TOKEN;
+  const toEnv = process.env.WHATSAPP_TO || '';
+  if (!token) throw new Error('Whapi token missing (WHAPI_TOKEN).');
+  const to = toEnv.replace(/^whatsapp:/i, '').replace(/\D/g, '');
+  if (!to) throw new Error('Destination number invalid for Whapi (WHATSAPP_TO).');
+  const b64 = Buffer.from(pdfBytes).toString('base64');
+  // Many tenants accept data URL in 'media'. If your tenant expects raw base64, change to: media: b64
+  const payload = {
+    to,
+    media: `data:application/pdf;base64,${b64}`,
+    caption: caption || undefined,
+    filename: filename || 'relatorio.pdf',
+    file_name: filename || 'relatorio.pdf',
+  } as any;
+  const res = await fetch(`${apiBase}/messages/document`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  } as any);
+  const txt = await res.text().catch(()=> '');
+  if (!res.ok) {
+    try { const j = JSON.parse(txt); const msg = j?.message || j?.error || txt || res.statusText; throw new Error(`Whapi document (base64) failed (${res.status}): ${msg}`); } catch { throw new Error(`Whapi document (base64) failed (${res.status}): ${txt || res.statusText}`); }
+  }
+  try { const j = JSON.parse(txt); const id = j?.message?.id || j?.id || 'unknown'; const status = j?.message?.status || j?.status || 'accepted'; return { sid: String(id), status, to }; } catch { return { sid: 'unknown', status: 'accepted', to }; }
+}
+
+async function uploadPdfToWhapi(pdfBytes: Uint8Array, filename: string): Promise<string> {
+  const apiBase = (process.env.WHAPI_API_URL || 'https://gate.whapi.cloud').replace(/\/$/, '');
+  const token = process.env.WHAPI_TOKEN;
+  if (!token) throw new Error('Whapi token missing (WHAPI_TOKEN).');
+
+  const safeName = filename || 'relatorio.pdf';
+  const base64 = Buffer.from(pdfBytes).toString('base64');
+
+  // Try JSON base64 endpoints first (some Whapi deployments do not accept multipart)
+  const jsonAttempts: Array<{ url: string; body: any }> = [
+    { url: `${apiBase}/media`, body: { file: base64, filename: safeName, mime_type: 'application/pdf' } },
+    { url: `${apiBase}/media`, body: { b64: base64, filename: safeName, mime_type: 'application/pdf' } },
+    { url: `${apiBase}/media`, body: { file: `data:application/pdf;base64,${base64}`, filename: safeName } },
+    { url: `${apiBase}/media/upload`, body: { file: base64, filename: safeName, mime_type: 'application/pdf' } },
+  ];
+  let lastTxt = '';
+  for (const attempt of jsonAttempts) {
+    const res = await fetch(attempt.url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(attempt.body),
+    } as any);
+    const txt = await res.text().catch(()=> '');
+    lastTxt = txt || res.statusText;
+    if (res.ok) {
+      try {
+        const j = JSON.parse(txt);
+        const id = j?.id || j?.media?.id || j?.data?.id || j?.message?.id;
+        if (!id) throw new Error('Whapi upload: no media id in response');
+        return String(id);
+      } catch (e) {
+        throw new Error(`Whapi upload parse failed: ${String(e)} | ${txt}`);
+      }
+    }
+  }
+
+  // Fallback to multipart if JSON uploads are not supported
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+  const form = new FormData();
+  form.append('file', blob, safeName);
+  for (const url of [`${apiBase}/media/upload`, `${apiBase}/media`]) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: form as any,
+    } as any);
+    const txt = await res.text().catch(()=> '');
+    lastTxt = txt || res.statusText;
+    if (res.ok) {
+      try {
+        const j = JSON.parse(txt);
+        const id = j?.id || j?.media?.id || j?.data?.id || j?.message?.id;
+        if (!id) throw new Error('Whapi upload: no media id in response');
+        return String(id);
+      } catch (e) {
+        throw new Error(`Whapi upload parse failed: ${String(e)} | ${txt}`);
+      }
+    }
+  }
+
+  throw new Error(`Whapi upload failed: ${lastTxt}`);
+}
+
+async function sendDocumentViaWhapiMediaId(mediaId: string, caption?: string, filename?: string): Promise<TwilioSendResult> {
+  const apiBase = (process.env.WHAPI_API_URL || 'https://gate.whapi.cloud').replace(/\/$/, '');
+  const token = process.env.WHAPI_TOKEN;
+  const toEnv = process.env.WHATSAPP_TO || '';
+  if (!token) throw new Error('Whapi token missing (WHAPI_TOKEN).');
+  const to = toEnv.replace(/^whatsapp:/i, '').replace(/\D/g, '');
+  if (!to) throw new Error('Destination number invalid for Whapi (WHATSAPP_TO).');
+  const payload = { to, media: String(mediaId), caption: caption || undefined, filename: filename || 'relatorio.pdf', file_name: filename || 'relatorio.pdf' } as any;
+  const res = await fetch(`${apiBase}/messages/document`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  } as any);
+  const txt = await res.text().catch(()=> '');
+  if (!res.ok) {
+    try { const j = JSON.parse(txt); const msg = j?.message || j?.error || txt || res.statusText; throw new Error(`Whapi document failed (${res.status}): ${msg}`); } catch { throw new Error(`Whapi document failed (${res.status}): ${txt || res.statusText}`); }
+  }
+  try { const j = JSON.parse(txt); const id = j?.message?.id || j?.id || 'unknown'; const status = j?.message?.status || j?.status || 'accepted'; return { sid: String(id), status, to }; } catch { return { sid: 'unknown', status: 'accepted', to }; }
 }

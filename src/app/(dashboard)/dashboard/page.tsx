@@ -16,7 +16,7 @@ import { fetchDashboardData } from "./actions";
 import { newsReportToPdfBytes } from "@/lib/news-report-pdf";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2 } from "lucide-react";
-import { sendTextToWhatsApp } from "@/app/(dashboard)/noticias/whatsapp";
+import { sendReportPdfToWhatsAppUpload } from "@/app/(dashboard)/noticias/whatsapp";
 
 type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
   sentiment_score: number;
@@ -131,18 +131,16 @@ export default function DashboardPage() {
       setSendingReport(true);
       const type = (reportType ?? 'weekly');
       const days = type === 'daily' ? 1 : type === 'weekly' ? 7 : 7;
-      const data = await generateNewsReportAction({ type, query: '', days } as any);
-      const text = buildWhatsAppReportMessage(data);
-      if (!text) throw new Error('Não foi possível montar o relatório.');
-      await sendTextToWhatsApp(text);
-      toast({ title: 'Enviado', description: 'Relatório enviado para o WhatsApp configurado.' });
+      // Envia o PDF como anexo (upload direto no Whapi quando configurado)
+      await sendReportPdfToWhatsAppUpload({ type, query: '', days, caption: 'Relatório de Notícias' });
+      toast({ title: 'Enviado', description: 'PDF do relatório enviado para o WhatsApp configurado.' });
     } catch (e: any) {
       console.error(e);
       toast({ title: 'Falha no envio', description: e?.message || 'Verifique as credenciais e tente novamente.', variant: 'destructive' });
     } finally {
       setSendingReport(false);
     }
-  }, [reportType, buildWhatsAppReportMessage, toast]);
+  }, [reportType, toast]);
   // Temas e fontes (mock - pronto para API)
   const availableThemes = React.useMemo(() => (
     ['economia','saude','educacao','seguranca','meio_ambiente','corrupcao']
