@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { generateNewsReportAction, searchNews } from "../noticias/actions";
 import type { DashboardData } from "./actions";
 import { fetchDashboardData } from "./actions";
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [reportData, setReportData] = React.useState<any>(null);
   const [sendingReport, setSendingReport] = React.useState(false);
   const [sendingSixHourPdf, setSendingSixHourPdf] = React.useState(false);
+  const [customForm, setCustomForm] = React.useState<{ query: string; days: number }>({ query: "", days: 7 });
   
 
   React.useEffect(() => {
@@ -354,7 +356,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-3">
             <Button size="sm" onClick={()=> openReport('daily')}>Relatório Diário</Button>
             <Button size="sm" variant="outline" onClick={()=> openReport('weekly')}>Relatório Semanal</Button>
-            <Button size="sm" variant="secondary" onClick={()=> openReport('custom')}>Personalizado…</Button>
+            <Button size="sm" variant="secondary" onClick={()=> { setReportOpen(true); setReportType('custom'); setReportData(null); }}>Personalizado…</Button>
             <Button size="sm" variant="outline" onClick={handleSendReportWhatsApp} disabled={sendingReport}>
               {sendingReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar relatório via WhatsApp
             </Button>
@@ -389,6 +391,23 @@ export default function DashboardPage() {
               {reportType==='custom' ? 'Relatorio Personalizado' : reportType==='daily' ? 'Relatorio Diario' : 'Relatorio Semanal'}
             </DialogTitle>
           </DialogHeader>
+          {reportType==='custom' && !reportData && !reportLoading && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="q">Consulta (tema/político)</Label>
+                  <Input id="q" value={customForm.query} onChange={(e)=> setCustomForm(s=>({...s, query:e.target.value}))} placeholder="Inflação, PEC, STF..." />
+                </div>
+                <div>
+                  <Label htmlFor="d">Dias</Label>
+                  <Input id="d" type="number" min={1} max={30} value={customForm.days} onChange={(e)=> setCustomForm(s=>({...s, days: Math.max(1, Math.min(30, Number(e.target.value)||7))}))} />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={()=> openReport('custom', customForm as any)} disabled={reportLoading}>Gerar</Button>
+              </div>
+            </div>
+          )}
           {reportLoading && (
             <div className="py-6 text-center text-muted-foreground">Gerando relatorio…</div>
           )}
