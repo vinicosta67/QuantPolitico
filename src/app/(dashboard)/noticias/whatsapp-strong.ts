@@ -50,9 +50,9 @@ export async function sendSixHourNewsPdfToWhatsAppStrong() {
     summary: byId.get(String(n.id || idx)) || n.summary || '',
   }));
 
-  const pdfBytes = await newsListToPdfBytes(list, 'Notícias (polaridade forte)');
+  const pdfBytes = await newsListToPdfBytes(list, 'Notícias importantes');
   const stamp = new Date().toISOString().slice(0, 10);
   const filename = `Noticias_6h_${stamp}.pdf`;
-  return sendPdfToWhatsApp({ filename, pdfBytes, caption: 'Notícias (filtradas) – últimas 6h' });
+  return sendPdfToWhatsApp({ filename, pdfBytes, caption: 'Notícias – últimas 6h' });
 }
 
