@@ -3,6 +3,7 @@
 import { fetchPoliticalNews } from '@/ai/tools/fetch-news';
 import { fetchOnlinePoliticalNews } from '@/ai/tools/fetch-online-news';
 import type { NewsArticle } from '@/lib/types';
+import { newsListToPdfBytes } from '@/lib/news-list-pdf';
 
 export type NewsFilters = {
   query?: string;
@@ -488,4 +489,119 @@ export async function getDemoNewsMessages() {
 // Send arbitrary text to the configured WhatsApp destination
 export async function sendTextToWhatsApp(text: string) {
   return sendWhatsAppGeneric(text);
+}
+
+// Send a PDF document to WhatsApp (supports 'whapi' provider)
+export async function sendPdfToWhatsApp(input: { filename: string; pdfBytes: Uint8Array; caption?: string }) {
+  const provider = (process.env.WHATSAPP_PROVIDER || 'twilio').toLowerCase();
+  if (provider === 'whapi' || provider === 'whapi.cloud' || provider === 'whapicloud') {
+    return sendViaWhapiDocument(input);
+  }
+  throw new Error('Envio de PDF via WhatsApp não suportado para este provedor. Use WHATSAPP_PROVIDER=whapi.');
+}
+
+async function sendViaWhapiDocument(input: { filename: string; pdfBytes: Uint8Array; caption?: string }): Promise<TwilioSendResult> {
+  const apiBase = (process.env.WHAPI_API_URL || 'https://gate.whapi.cloud').replace(/\/$/, '');
+  const token = process.env.WHAPI_TOKEN;
+  const toEnv = process.env.WHATSAPP_TO || '';
+  if (!token) throw new Error('Whapi token missing (WHAPI_TOKEN).');
+  const to = toEnv.replace(/^whatsapp:/i, '').replace(/\D/g, '');
+  if (!to) throw new Error('Destination number invalid for Whapi (WHATSAPP_TO).');
+
+  const url = `${apiBase}/messages/document`;
+  const base64 = Buffer.from(input.pdfBytes).toString('base64');
+  // Whapi typically accepts data URLs or raw base64 field
+  const fileDataUrl = `data:application/pdf;base64,${base64}`;
+  const payload: any = {
+    to,
+    caption: input.caption || 'Relatório',
+    filename: input.filename || 'relatorio.pdf',
+    // Some deployments expect `document` object; others accept `media` at root
+    // We include both for wider compatibility.
+    document: { filename: input.filename || 'relatorio.pdf', link: fileDataUrl },
+    media: fileDataUrl,
+    mime_type: 'application/pdf',
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  } as any);
+
+  const txt = await res.text().catch(()=> '');
+  if (!res.ok) {
+    try {
+      const j = JSON.parse(txt);
+      const msg = j?.message || j?.error || txt || res.statusText;
+      throw new Error(`Whapi document send failed (${res.status}): ${msg}`);
+    } catch {
+      throw new Error(`Whapi document send failed (${res.status}): ${txt || res.statusText}`);
+    }
+  }
+
+  try {
+    const j = JSON.parse(txt);
+    const id = j?.message?.id || j?.id || 'unknown';
+    const status = j?.message?.status || j?.status || 'accepted';
+    return { sid: String(id), status, to };
+  } catch {
+    return { sid: 'unknown', status: 'accepted', to };
+  }
+}
+
+// Full server flow: fetch 6h news JSON, build PDF and send via WhatsApp
+// export async function sendSixHourNewsPdfToWhatsApp() {
+//   console.log('fui chamada!')
+//   const backendBase = (process.env.BACKEND_URL || '')
+//   const container = (process.env.CONTAINER_URL || '')
+//   if (!backendBase || !container) throw new Error('BACKEND_URL/CONTAINER_URL não configurados.')
+//   const url = `${backendBase}/${container}/noticias_atuais_6horas.json`
+
+//   const res = await fetch('https://trademachine.blob.core.windows.net/base-dados/noticias_atuais_6horas.json',{method:'GET', redirect:'follow'})
+//   if (!res.ok) throw new Error(`Falha ao buscar notícias (HTTP ${res.status})`)
+//   const json = await res.json()
+// console.log('json: ', json)
+//   const list = Array.isArray(json) ? json : [json]
+//   if (!list.length) throw new Error('Nenhuma notícia encontrada para o período de 6 horas.')
+
+//   const pdfBytes = await newsListToPdfBytes(list, 'Notícias (últimas 6 horas)')
+//   const stamp = new Date().toISOString().slice(0, 10)
+//   const filename = `Noticias_6h_${stamp}.pdf`
+//   return sendPdfToWhatsApp({ filename, pdfBytes, caption: 'Notícias das últimas 6 horas' })
+// }
+
+export async function sendSixHourNewsPdfToWhatsApp() {
+  const backendBase = (process.env.BACKEND_URL || '').replace(/\/$/, '');
+  const container = (process.env.CONTAINER_URL || '').replace(/^\//, '').replace(/\/$/, '');
+  if (!backendBase || !container) throw new Error('BACKEND_URL/CONTAINER_URL não configurados.');
+  const url = `${backendBase}/${container}/noticias_atuais_6horas.json`;
+
+  const res = await fetch(url, { method: 'GET', redirect: 'follow' } as any);
+  if (!res.ok) throw new Error(`Falha ao buscar notícias (HTTP ${res.status})`);
+
+  const raw = (await res.text()) ?? '';
+  const cleaned = raw.replace(/^\uFEFF/, '').trim();
+  let data: any;
+
+  try {
+    data = JSON.parse(cleaned);
+  } catch {
+    const lines = cleaned.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1 && lines.every(l => l.startsWith('{') || l.startsWith('['))) {
+      data = lines.map(l => JSON.parse(l)).flat();
+    } else if (/}\s*{/.test(cleaned)) {
+      data = JSON.parse(`[${cleaned.replace(/}\s*{/g, '},{')}]`);
+    } else {
+      throw new SyntaxError(`Conteúdo não é JSON válido nem NDJSON. Início: ${cleaned.slice(0, 160)}`);
+    }
+  }
+
+  const list = Array.isArray(data) ? data : [data];
+  if (!list.length) throw new Error('Nenhuma notícia encontrada para o período de 6 horas.');
+
+  const pdfBytes = await newsListToPdfBytes(list, 'Notícias (últimas 6 horas)');
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = `Noticias_6h_${stamp}.pdf`;
+  return sendPdfToWhatsApp({ filename, pdfBytes, caption: 'Notícias das últimas 6 horas' });
 }

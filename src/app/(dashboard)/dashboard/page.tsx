@@ -14,9 +14,10 @@ import { generateNewsReportAction, searchNews } from "../noticias/actions";
 import type { DashboardData } from "./actions";
 import { fetchDashboardData } from "./actions";
 import { newsReportToPdfBytes } from "@/lib/news-report-pdf";
+// (Server will generate the PDF for WhatsApp send)
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2 } from "lucide-react";
-import { sendTextToWhatsApp } from "@/app/(dashboard)/noticias/whatsapp";
+import { sendTextToWhatsApp, sendSixHourNewsPdfToWhatsApp } from "@/app/(dashboard)/noticias/whatsapp";
 
 type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
   sentiment_score: number;
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const [reportLoading, setReportLoading] = React.useState(false);
   const [reportData, setReportData] = React.useState<any>(null);
   const [sendingReport, setSendingReport] = React.useState(false);
+  const [sendingSixHourPdf, setSendingSixHourPdf] = React.useState(false);
   
 
   React.useEffect(() => {
@@ -143,6 +145,20 @@ export default function DashboardPage() {
       setSendingReport(false);
     }
   }, [reportType, buildWhatsAppReportMessage, toast]);
+
+  // Envia PDF de notícias das últimas 6 horas via WhatsApp
+  const handleSendSixHourNewsPdfWhatsApp = React.useCallback(async () => {
+    try {
+      setSendingSixHourPdf(true)
+      await sendSixHourNewsPdfToWhatsApp()
+      toast({ title: 'Enviado', description: 'PDF com notícias (6h) enviado ao WhatsApp configurado.' })
+    } catch (e: any) {
+      console.error(e)
+      toast({ title: 'Falha no envio', description: e?.message || 'Verifique as credenciais e tente novamente.', variant: 'destructive' })
+    } finally {
+      setSendingSixHourPdf(false)
+    }
+  }, [toast])
   // Temas e fontes (mock - pronto para API)
   const availableThemes = React.useMemo(() => (
     ['economia','saude','educacao','seguranca','meio_ambiente','corrupcao']
@@ -341,6 +357,9 @@ export default function DashboardPage() {
             <Button size="sm" variant="secondary" onClick={()=> openReport('custom')}>Personalizado…</Button>
             <Button size="sm" variant="outline" onClick={handleSendReportWhatsApp} disabled={sendingReport}>
               {sendingReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar relatório via WhatsApp
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleSendSixHourNewsPdfWhatsApp} disabled={sendingSixHourPdf}>
+              {sendingSixHourPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />} Enviar notícias 6 horas
             </Button>
           </div>
         </CardContent>
