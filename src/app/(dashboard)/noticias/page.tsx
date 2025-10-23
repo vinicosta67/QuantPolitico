@@ -97,10 +97,14 @@ export default function NoticiasPage() {
   }, [allNews]);
   type Trend = { date: string; news_count: number; avg_sentiment: number; positive_count: number; negative_count: number };
   const [trends, setTrends] = React.useState<Trend[]>([]);
-  const [searchForm, setSearchForm] = React.useState({ query: '', politician: 'all' as 'all'|'Lula'|'Bolsonaro'|'Tarcísio'|'Boulos', days: 7 as 1|7|30|90, sentiment: 'all' as 'all'|'positive'|'negative'|'neutral' });
+  const [searchForm, setSearchForm] = React.useState({ query: '', politician: 'all' as 'all'|'Lula'|'Bolsonaro'|'Tarcísio'|'Boulos', days: 30 as 1|7|30|90, sentiment: 'all' as 'all'|'positive'|'negative'|'neutral' });
   const [searchResults, setSearchResults] = React.useState<ExtendedNews[]>([]);
   const [searchPage, setSearchPage] = React.useState(1);
   const [searchPageSize, setSearchPageSize] = React.useState<5|10|20|100>(10);
+  // Ensure default search period is 30 days on mount
+  React.useEffect(() => {
+    setSearchForm((s:any) => (s && s.days === 30) ? s : { ...s, days: 30 });
+  }, []);
 
   // Reports UI state
   const [reportOpen, setReportOpen] = React.useState(false);
@@ -118,7 +122,7 @@ export default function NoticiasPage() {
     category: "all",
     sentiment: "all",
     politician: "all",
-    hours: 168 as 6 | 12 | 24 | 48 | 168,
+    hours: 720 as 6 | 12 | 24 | 48 | 168 | 720,
   });
 
   const loadNews = React.useCallback(async () => {
@@ -355,7 +359,7 @@ export default function NoticiasPage() {
       </div>
 
       {/* Métricas */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Total de Notícias</CardTitle></CardHeader>
           <CardContent className="text-2xl font-bold">{metrics.total}</CardContent>
@@ -368,8 +372,7 @@ export default function NoticiasPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">Notícias Positivas</CardTitle></CardHeader>
           <CardContent className={`text-2xl font-bold ${positivePctColor(metrics.positivePercentage)}`}>{metrics.positivePercentage.toFixed(1)}%</CardContent>
         </Card>
-        {/* Removed Confiança card as requested */}
-      </div>
+=      </div> */}
 
       {/* Filtros */}
       <Card>
@@ -437,7 +440,7 @@ export default function NoticiasPage() {
           </div>
           <div className="flex items-center justify-between gap-3">
             <small className="text-muted-foreground">Mostrando {filteredNews.length} de {allNews.length} notícias</small>
-            <Button variant="outline" size="sm" onClick={()=> setFilters({ query:'', category:'all', sentiment:'all', politician:'all', hours:168 })}>Limpar filtros</Button>
+            <Button variant="outline" size="sm" onClick={()=> setFilters({ query:'', category:'all', sentiment:'all', politician:'all', hours:720 })}>Limpar filtros</Button>
           </div>
         </CardContent>
       </Card>
@@ -505,7 +508,7 @@ export default function NoticiasPage() {
       </Card>
 
       {/* Monitor de Notícias */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Monitor de Notícias</CardTitle>
           <CardDescription>Análise e monitoramento com dados reais</CardDescription>
@@ -584,7 +587,7 @@ export default function NoticiasPage() {
                         <SelectItem value="1">Hoje</SelectItem>
                         <SelectItem value="7">Última semana</SelectItem>
                         <SelectItem value="30">Último mês</SelectItem>
-                        <SelectItem value="90">3 meses</SelectItem>
+                        <SelectItem value="days: 30 as 1|7|30|days: 30 as 1|7|30|90">3 meses</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -681,8 +684,8 @@ export default function NoticiasPage() {
                   <LineChart data={trends}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
-                    <YAxis yAxisId="left" label={{ value: 'Volume', angle: -90, position: 'insideLeft' }} />
-                    <YAxis yAxisId="right" orientation="right" domain={[-1,1]} label={{ value: 'Sentimento', angle: 90, position: 'insideRight' }} />
+                    <YAxis yAxisId="left" label={{ value: 'Volume', angle: -days: 30 as 1|7|30|days: 30 as 1|7|30|90, position: 'insideLeft' }} />
+                    <YAxis yAxisId="right" orientation="right" domain={[-1,1]} label={{ value: 'Sentimento', angle: days: 30 as 1|7|30|days: 30 as 1|7|30|90, position: 'insideRight' }} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Legend />
                     <Line yAxisId="left" type="monotone" dataKey="news_count" stroke="hsl(var(--primary))" name="Volume de Notícias" />
@@ -761,7 +764,7 @@ export default function NoticiasPage() {
             </TabsContent>
           </Tabs>
         </CardContent>
-      </Card>
+      </Card> */}
       {/* Report Dialog */}
       <Dialog open={reportOpen} onOpenChange={(o)=>{ setReportOpen(o); if(!o){ setReportData(null); setReportLoading(false);} }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
@@ -815,4 +818,6 @@ export default function NoticiasPage() {
     </div>
   );
 }
+
+
 
