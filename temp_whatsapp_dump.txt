@@ -606,3 +606,4 @@ export async function sendSixHourNewsPdfToWhatsApp() {
   const filename = `Noticias_6h_${stamp}.pdf`;
   return sendPdfToWhatsApp({ filename, pdfBytes, caption: 'Notícias das últimas 6 horas' });
 }
+

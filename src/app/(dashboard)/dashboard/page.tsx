@@ -18,7 +18,8 @@ import { newsReportToPdfBytes } from "@/lib/news-report-pdf";
 // (Server will generate the PDF for WhatsApp send)
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2 } from "lucide-react";
-import { sendTextToWhatsApp, sendSixHourNewsPdfToWhatsApp } from "@/app/(dashboard)/noticias/whatsapp";
+import { sendTextToWhatsApp } from "@/app/(dashboard)/noticias/whatsapp";
+import { sendSixHourNewsPdfToWhatsAppStrong } from "@/app/(dashboard)/noticias/whatsapp-strong";
 
 type ExtendedNews = (NewsArticle & { publishedAtLabel: string; sentimentValue?: number }) & {
   sentiment_score: number;
@@ -152,7 +153,7 @@ export default function DashboardPage() {
   const handleSendSixHourNewsPdfWhatsApp = React.useCallback(async () => {
     try {
       setSendingSixHourPdf(true)
-      await sendSixHourNewsPdfToWhatsApp()
+      await sendSixHourNewsPdfToWhatsAppStrong()
       toast({ title: 'Enviado', description: 'PDF com notícias (6h) enviado ao WhatsApp configurado.' })
     } catch (e: any) {
       console.error(e)

@@ -56,7 +56,12 @@ function formatDateLabel(value?: number | string) {
 
 function formatSentimentLabel(v?: number) {
   if (typeof v !== 'number') return 'Neutro'
-  return v > 0.2 ? 'Positivo' : v < -0.2 ? 'Negativo' : 'Neutro'
+  return v > 0.3 ? 'Positiva' : v < -0.3 ? 'Negativa' : 'Neutro'
+}
+
+function sentimentEmoji(v?: number) {
+  if (typeof v !== 'number') return ':-|'
+  return v > 0.3 ? ':)' : v < -0.3 ? ':(' : ':-|'
 }
 
 export async function newsListToPdfBytes(items: SixHourNewsItem[], title = 'Notícias (últimas 6 horas)'): Promise<Uint8Array> {
@@ -105,20 +110,26 @@ export async function newsListToPdfBytes(items: SixHourNewsItem[], title = 'Not�
     const titleWrapped = wrapLinesByWidth(fontBold, titleText, 13, maxW)
     for (const l of titleWrapped) { page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 13, font: fontBold }); y -= 12 }
 
-    // Meta line: fonte • data • sentimento
-    const metaParts = [source || '', dateLabel || '', sentimentLabel ? `Sentimento: ${sentimentLabel}` : ''].filter(Boolean)
+    // Small source badge (mimic 'Broadcast')
+    page.drawText('Broadcast', { x: margin, y, size: 9, font: fontBold, color: rgb(0.35, 0.35, 0.35) });
+    y -= 10
+
+    // Meta line: fonte • data • sentimento + emoji
+    const metaParts = [source || '', dateLabel || '', sentimentLabel ? `Sentimento: ${sentimentLabel} ${sentimentEmoji(n.polaridade as any)}` : ''].filter(Boolean)
     if (metaParts.length) { page.drawText(sanitizeWinAnsi(metaParts.join(' • ')), { x: margin, y, size: 10, font: fontRegular, color: rgb(0.35, 0.35, 0.35) }); y -= GAP.line }
 
     // Summary
     const summary = n.summary || ''
     if (summary) {
       const lines = wrapLinesByWidth(fontRegular, summary, 11, maxW)
-      for (const l of lines) { page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 11, font: fontRegular }); y -= 12 }
+      const limited = lines.slice(0, 4)
+      for (const l of limited) { page.drawText(sanitizeWinAnsi(l), { x: margin, y, size: 11, font: fontRegular }); y -= 12 }
+      if (lines.length > 4) { page.drawText('...', { x: margin, y, size: 11, font: fontRegular }); y -= 12 }
     }
 
     // Link
     const link = n.sourceurl
-    if (link) { page.drawText(sanitizeWinAnsi(link), { x: margin, y, size: 10, font: fontRegular, color: rgb(0.1,0.32,0.65) }); y -= GAP.block }
+    if (link) { page.drawText(sanitizeWinAnsi(link), { x: margin, y, size: 10, font: fontRegular, color: rgb(0.1,0.32,0.65), link }); y -= GAP.block }
 
     drawRule()
     y -= 10

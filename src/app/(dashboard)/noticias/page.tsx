@@ -430,6 +430,7 @@ export default function NoticiasPage() {
                   <SelectItem value="24">24 horas</SelectItem>
                   <SelectItem value="48">48 horas</SelectItem>
                   <SelectItem value="168">7 dias</SelectItem>
+                  <SelectItem value="720">30 dias</SelectItem>
                 </SelectContent>
               </Select>
             </div>
